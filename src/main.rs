@@ -12,8 +12,6 @@ use ratatui::{
 
 mod input;
 
-// Normal mode / Editing mode
-
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
 }
@@ -67,7 +65,8 @@ impl App {
                 ])
                 .centered(),
             )
-            .borders(Borders::ALL);
+            .borders(Borders::ALL)
+            .border_style(Style::new().cyan());
 
         match self.input_mode {
             InputMode::Editing => {
@@ -75,7 +74,7 @@ impl App {
                     Block::new()
                         .title_top(Line::from(" Project name ".bold()).centered())
                         .title_bottom(
-                            Line::from_iter([" Exit editing ".yellow(), "<ESC>".bold().blue()])
+                            Line::from_iter([" Exit editing ".yellow(), "<ESC>".bold().cyan()])
                                 .centered(),
                         )
                         .borders(Borders::ALL)
@@ -90,10 +89,17 @@ impl App {
             }
             InputMode::Normal => {
                 let layout = Layout::vertical(vec![Constraint::Min(3)]);
+                let hint = Line::from_iter([
+                    " Add new project ".to_span(),
+                    "<P>".yellow().bold(),
+                    " Exit ".to_span(),
+                    "<Q>".yellow().bold(),
+                ])
+                .centered();
 
                 let [main_area] = frame.area().layout(&layout);
 
-                frame.render_widget(main_block, main_area);
+                frame.render_widget(main_block.title_bottom(hint), main_area);
             }
         };
     }
