@@ -5,15 +5,14 @@ use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
-    style::{Style, Styled, Stylize},
-    text::Line,
+    style::{Style, Stylize},
+    text::{Line, Span, ToSpan},
     widgets::{Block, Borders, Paragraph},
 };
 
 mod input;
 
 // Normal mode / Editing mode
-// Welcome to Aeternitas / version
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
@@ -49,7 +48,25 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         let main_block = Block::new()
-            .title_top(Line::from(" Aeternitas ".bold()))
+            .title_top(
+                Line::from_iter([
+                    " Welcome to ".to_span(),
+                    "A".light_red().bold(),
+                    "e".red().bold(),
+                    "t".light_magenta().bold(),
+                    "e".magenta().bold(),
+                    "r".light_yellow().bold(),
+                    "n".yellow().bold(),
+                    "i".light_green().bold(),
+                    "t".green().bold(),
+                    "a".light_blue().bold(),
+                    "s".blue().bold(),
+                    "! / ".to_span(),
+                    Span::from(env!("CARGO_PKG_VERSION")),
+                    " ".to_span(),
+                ])
+                .centered(),
+            )
             .borders(Borders::ALL);
 
         match self.input_mode {
