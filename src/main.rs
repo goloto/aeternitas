@@ -4,7 +4,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Position},
     style::{Style, Stylize},
     text::{Line, Span, ToSpan},
     widgets::{Block, Borders, Paragraph},
@@ -84,6 +84,10 @@ impl App {
                 let layout = Layout::vertical(vec![Constraint::Min(3), Constraint::Length(3)]);
                 let [main_area, input_area] = frame.area().layout(&layout);
 
+                frame.set_cursor_position(Position::new(
+                    input_area.x + self.input.character_index + 1,
+                    input_area.y + 1,
+                ));
                 frame.render_widget(main_block, main_area);
                 frame.render_widget(input_block, input_area);
             }
