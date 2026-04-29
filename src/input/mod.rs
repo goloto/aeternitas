@@ -2,8 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 pub struct Input {
     pub input: String,
-    // TODO: сделать проверку на размер поля ввода
-    pub character_index: u16,
+    pub character_index: usize,
 }
 
 impl Input {

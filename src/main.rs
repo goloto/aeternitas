@@ -85,7 +85,7 @@ impl App {
                 let [main_area, input_area] = frame.area().layout(&layout);
 
                 frame.set_cursor_position(Position::new(
-                    input_area.x + self.input.character_index + 1,
+                    input_area.x + u16::try_from(self.input.character_index).unwrap_or(0) + 1,
                     input_area.y + 1,
                 ));
                 frame.render_widget(main_block, main_area);
