@@ -1,0 +1,37 @@
+pub struct TimeFormating {}
+
+const SECONDS_IN_DAY: u64 = 60 * 60 * 24;
+const SECONDS_IN_HOUR: u64 = 60 * 60;
+const SECONDS_IN_MINUTE: u64 = 60;
+
+impl TimeFormating {
+    fn euclid(divine: u64, divider: u64) -> (u64, u64) {
+        let result = divine.div_euclid(divider);
+        let remainder = divine.rem_euclid(divider);
+
+        (result, remainder)
+    }
+
+    pub fn from_seconds(seconds: u64) -> String {
+        if seconds > SECONDS_IN_DAY {
+            let (days, days_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_DAY);
+            let (hours, hours_remainder) = TimeFormating::euclid(days_remainder, SECONDS_IN_HOUR);
+            let (minutes, minutes_remainder) =
+                TimeFormating::euclid(hours_remainder, SECONDS_IN_MINUTE);
+
+            format!("{days}d {hours}h {minutes}m {minutes_remainder}s")
+        } else if seconds > SECONDS_IN_HOUR {
+            let (hours, hours_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_HOUR);
+            let (minutes, minutes_remainder) =
+                TimeFormating::euclid(hours_remainder, SECONDS_IN_MINUTE);
+
+            format!("{hours}h {minutes}m {minutes_remainder}s")
+        } else if seconds > SECONDS_IN_MINUTE {
+            let (minutes, minutes_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_MINUTE);
+
+            format!("{minutes}m {minutes_remainder}s")
+        } else {
+            format!("{seconds}s")
+        }
+    }
+}

@@ -13,8 +13,10 @@ use ratatui::{
     text::{Line, Span, ToSpan},
     widgets::{Block, Borders, Paragraph},
 };
+use time_formating::TimeFormating;
 
 mod input;
+mod time_formating;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
@@ -96,7 +98,9 @@ impl App {
             Line::from_iter(["Now: ".to_span(), Span::from(&self.current_time)]);
         let current_task_block = Line::from_iter([
             "After launch: ".to_span(),
-            Span::from(self.project_start.elapsed().as_secs().to_string()),
+            Span::from(TimeFormating::from_seconds(
+                self.project_start.elapsed().as_secs(),
+            )),
         ]);
 
         let timer_block = Block::new()
