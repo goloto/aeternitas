@@ -31,8 +31,9 @@ pub struct App {
 }
 
 enum Screen {
-    Editing,
     Dashboard,
+    NewTimer,
+    NewProject,
 }
 
 impl App {
@@ -93,7 +94,10 @@ impl App {
                 self.draw_dashboard(frame, main_area);
                 self.draw_hint(frame, hint_area);
             }
-            Screen::Editing => {
+            Screen::NewTimer => {
+                self.draw_hint(frame, hint_area);
+            }
+            Screen::NewProject => {
                 self.draw_hint(frame, hint_area);
             }
         };
@@ -102,17 +106,20 @@ impl App {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match self.screen {
-                Screen::Editing => match key_event.code {
-                    KeyCode::Esc => self.to_screen(Screen::Dashboard),
-                    KeyCode::Enter => self.submit_input(),
-                    _ => self.input.handle_key_event(key_event),
-                },
                 Screen::Dashboard => match key_event.code {
-                    KeyCode::Char('n') => self.start_tracking(),
-                    KeyCode::Char('s') => self.stop_tracking(),
-                    KeyCode::Char('p') => self.to_screen(Screen::Editing),
+                    KeyCode::Char('n') => self.to_screen(Screen::NewTimer),
+                    KeyCode::Char('p') => self.to_screen(Screen::NewProject),
                     KeyCode::Char('q') => self.exit(),
                     _ => {}
+                },
+                Screen::NewTimer => match key_event.code {
+                    KeyCode::Esc => self.from_screen(Screen::NewTimer),
+                    _ => {}
+                },
+                Screen::NewProject => match key_event.code {
+                    KeyCode::Esc => self.from_screen(Screen::NewProject),
+                    KeyCode::Enter => self.submit_new_project(),
+                    _ => self.input.handle_key_event(key_event),
                 },
             },
             _ => {}
@@ -165,41 +172,52 @@ impl App {
 
                 frame.render_widget(hint.block(wrapper), area);
             }
-            Screen::Editing => {
+            Screen::NewProject => {
                 let hint = Paragraph::new(Line::from_iter([
+                    "<Enter>".bold(),
+                    " Submit, ".to_span(),
                     "<ESC>".bold(),
-                    " Cancel editing ".to_span(),
+                    " Cancel ".to_span(),
+                ]));
+
+                frame.render_widget(hint.block(wrapper), area);
+            }
+            Screen::NewTimer => {
+                let hint = Paragraph::new(Line::from_iter([
+                    "<Up/Down/Enter>".bold(),
+                    " Select project, ".to_span(),
+                    "<ESC>".bold(),
+                    " Cancel ".to_span(),
                 ]));
 
                 frame.render_widget(hint.block(wrapper), area);
             }
         }
-
     }
 
     fn exit(&mut self) {
         self.should_exit = true;
     }
 
-    fn start_tracking(&mut self) {
-        self.project_start = Instant::now();
-    }
-
-    fn stop_tracking(&mut self) {
-        let elapsed = self.project_start.elapsed().as_secs();
-
-        println!("elapsed: {elapsed}")
-    }
-
     fn to_screen(&mut self, screen: Screen) {
-        self.screen = screen;
+        match screen {
+            Screen::NewProject => {
+                self.input = Input::new();
+                self.screen = screen;
+            }
+            _ => self.screen = screen,
+        }
     }
 
-    fn new_input(&mut self) {
-        self.input = Input::new();
+    fn from_screen(&mut self, screen: Screen) {
+        match screen {
+            Screen::NewProject => self.screen = Screen::Dashboard,
+            Screen::NewTimer => self.screen = Screen::Dashboard,
+            _ => {}
+        }
     }
 
-    fn submit_input(&mut self) {
+    fn submit_new_project(&mut self) {
         todo!()
     }
 }
