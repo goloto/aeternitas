@@ -8,7 +8,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Position},
+    layout::{Constraint, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span, ToSpan},
     widgets::{Block, Borders, Paragraph},
@@ -24,22 +24,22 @@ fn main() -> io::Result<()> {
 
 pub struct App {
     should_exit: bool,
-    input_mode: InputMode,
+    screen: Screen,
     input: Input,
     current_time: String,
     project_start: Instant,
 }
 
-enum InputMode {
-    Normal,
+enum Screen {
     Editing,
+    Dashboard,
 }
 
 impl App {
     fn new() -> Self {
         Self {
             should_exit: false,
-            input_mode: InputMode::Normal,
+            screen: Screen::Dashboard,
             input: Input::new(),
             current_time: String::new(),
             project_start: Instant::now(),
@@ -70,8 +70,58 @@ impl App {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
-        let main_block = Block::new()
+    fn draw(&mut self, frame: &mut Frame) {
+        let current_time_block =
+            Line::from_iter(["Now: ".to_span(), Span::from(&self.current_time)]);
+        let current_task_block = Line::from_iter([
+            "After launch: ".to_span(),
+            Span::from(TimeFormating::from_seconds(
+                self.project_start.elapsed().as_secs(),
+            )),
+        ]);
+
+        let timer_block = Block::new()
+            .title_top(Line::from("Current timer").left_aligned())
+            .borders(Borders::ALL)
+            .border_style(Style::new().gray());
+
+        let layout = Layout::vertical(vec![Constraint::Min(3), Constraint::Length(3)]);
+        let [main_area, hint_area] = frame.area().layout(&layout);
+
+        match self.screen {
+            Screen::Dashboard => {
+                self.draw_dashboard(frame, main_area);
+                self.draw_hint(frame, hint_area);
+            }
+            Screen::Editing => {
+                self.draw_hint(frame, hint_area);
+            }
+        };
+    }
+
+    fn handle_events(&mut self) -> io::Result<()> {
+        match event::read()? {
+            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match self.screen {
+                Screen::Editing => match key_event.code {
+                    KeyCode::Esc => self.to_screen(Screen::Dashboard),
+                    KeyCode::Enter => self.submit_input(),
+                    _ => self.input.handle_key_event(key_event),
+                },
+                Screen::Dashboard => match key_event.code {
+                    KeyCode::Char('n') => self.start_tracking(),
+                    KeyCode::Char('s') => self.stop_tracking(),
+                    KeyCode::Char('p') => self.to_screen(Screen::Editing),
+                    KeyCode::Char('q') => self.exit(),
+                    _ => {}
+                },
+            },
+            _ => {}
+        };
+        Ok(())
+    }
+
+    fn draw_dashboard(&mut self, frame: &mut Frame, area: Rect) {
+        let dashboard = Block::new()
             .title_top(
                 Line::from_iter([
                     " Welcome to ".to_span(),
@@ -94,108 +144,37 @@ impl App {
             .borders(Borders::ALL)
             .border_style(Style::new().cyan());
 
-        let current_time_block =
-            Line::from_iter(["Now: ".to_span(), Span::from(&self.current_time)]);
-        let current_task_block = Line::from_iter([
-            "After launch: ".to_span(),
-            Span::from(TimeFormating::from_seconds(
-                self.project_start.elapsed().as_secs(),
-            )),
-        ]);
+        frame.render_widget(dashboard, area);
+    }
 
-        let timer_block = Block::new()
-            .title_top(Line::from("Current timer").left_aligned())
+    fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
+        let wrapper = Block::new()
             .borders(Borders::ALL)
             .border_style(Style::new().gray());
 
-        match self.input_mode {
-            InputMode::Editing => {
-                let input_block = Paragraph::new(String::from(&self.input.input)).block(
-                    Block::new()
-                        .title_top(Line::from(" What's project name? ".bold()).left_aligned())
-                        .title_bottom(
-                            Line::from_iter([" Exit editing ".yellow(), "<ESC>".bold().cyan()])
-                                .right_aligned(),
-                        )
-                        .borders(Borders::ALL)
-                        .border_style(Style::new().yellow()),
-                );
-
-                let layout = Layout::vertical(vec![
-                    Constraint::Min(3),
-                    Constraint::Length(3),
-                    Constraint::Length(3),
-                ]);
-                let timer_layout = Layout::horizontal(vec![
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(50),
-                ]);
-
-                let [main_area, timer_area, input_area] = frame.area().layout(&layout);
-                let [time_area, task_area] = timer_area.layout(&timer_layout);
-
-                frame.set_cursor_position(Position::new(
-                    input_area.x + u16::try_from(self.input.character_index).unwrap_or(0) + 1,
-                    input_area.y + 1,
-                ));
-
-                frame.render_widget(main_block, main_area);
-                frame.render_widget(timer_block, timer_area);
-                frame.render_widget(current_time_block, time_area);
-                frame.render_widget(current_task_block, task_area);
-                frame.render_widget(input_block, input_area);
-            }
-            InputMode::Normal => {
-                let layout = Layout::vertical(vec![Constraint::Min(3), Constraint::Length(3)]);
-                let timer_layout = Layout::horizontal(vec![
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(50),
-                ]);
-                let hint = Line::from_iter([
-                    " Start timer ".to_span(),
+        match self.screen {
+            Screen::Dashboard => {
+                let hint = Paragraph::new(Line::from_iter([
                     "<N>".bold(),
-                    " Stop timer ".to_span(),
-                    "<S>".bold(),
-                    " Add new project ".to_span(),
+                    " New timer, ".to_span(),
                     "<P>".bold(),
-                    " Exit ".to_span(),
+                    " New project, ".to_span(),
                     "<Q>".bold(),
-                ])
-                .yellow()
-                .right_aligned();
+                    " Exit ".to_span(),
+                ]));
 
-                let [main_area, timer_area] = frame.area().layout(&layout);
-                let [time_area, task_area] = timer_area.layout(&timer_layout);
-
-                frame.render_widget(main_block.title_bottom(hint), main_area);
-                frame.render_widget(timer_block, timer_area);
-                frame.render_widget(current_time_block, time_area);
-                frame.render_widget(current_task_block, task_area);
+                frame.render_widget(hint.block(wrapper), area);
             }
-        };
-    }
+            Screen::Editing => {
+                let hint = Paragraph::new(Line::from_iter([
+                    "<ESC>".bold(),
+                    " Cancel editing ".to_span(),
+                ]));
 
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                match self.input_mode {
-                    InputMode::Editing => match key_event.code {
-                        KeyCode::Esc => self.input_mode = InputMode::Normal,
-                        KeyCode::Enter => self.submit_input(),
-                        _ => self.input.handle_key_event(key_event),
-                    },
-                    _ => match key_event.code {
-                        KeyCode::Char('n') => self.start_tracking(),
-                        KeyCode::Char('s') => self.stop_tracking(),
-                        KeyCode::Char('p') => self.new_input(),
-                        KeyCode::Char('q') => self.exit(),
-                        _ => {}
-                    },
-                }
+                frame.render_widget(hint.block(wrapper), area);
             }
-            _ => {}
-        };
-        Ok(())
+        }
+
     }
 
     fn exit(&mut self) {
@@ -212,12 +191,15 @@ impl App {
         println!("elapsed: {elapsed}")
     }
 
+    fn to_screen(&mut self, screen: Screen) {
+        self.screen = screen;
+    }
+
     fn new_input(&mut self) {
         self.input = Input::new();
-        self.input_mode = InputMode::Editing;
     }
 
     fn submit_input(&mut self) {
-        self.input_mode = InputMode::Normal;
+        todo!()
     }
 }
