@@ -9,9 +9,9 @@ use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, List, ListState, Paragraph},
 };
 use time_formating::TimeFormating;
 
@@ -28,6 +28,7 @@ pub struct App {
     input: Input,
     current_time: String,
     project_start: Instant,
+    list_state: ListState,
 }
 
 enum Screen {
@@ -44,6 +45,7 @@ impl App {
             input: Input::new(),
             current_time: String::new(),
             project_start: Instant::now(),
+            list_state: ListState::default().with_selected(Some(0)),
         }
     }
 
@@ -95,9 +97,11 @@ impl App {
                 self.draw_hint(frame, hint_area);
             }
             Screen::NewTimer => {
+                self.draw_new_timer(frame, main_area);
                 self.draw_hint(frame, hint_area);
             }
             Screen::NewProject => {
+                self.draw_new_project(frame, main_area);
                 self.draw_hint(frame, hint_area);
             }
         };
@@ -114,6 +118,8 @@ impl App {
                 },
                 Screen::NewTimer => match key_event.code {
                     KeyCode::Esc => self.from_screen(Screen::NewTimer),
+                    KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
+                    KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
                     _ => {}
                 },
                 Screen::NewProject => match key_event.code {
@@ -152,6 +158,40 @@ impl App {
             .border_style(Style::new().cyan());
 
         frame.render_widget(dashboard, area);
+    }
+
+    fn draw_new_project(&mut self, frame: &mut Frame, area: Rect) {
+        let items = ["Item 1", "Item 2", "Item 3", "Item 4"];
+        let list = List::new(items)
+            .style(Color::White)
+            .highlight_style(Modifier::REVERSED)
+            .highlight_symbol("> ");
+
+        frame.render_widget(list, area);
+
+        let wrapper = Block::new()
+            .title_top(Line::from_iter([" Create new project ".to_span()]).left_aligned())
+            .borders(Borders::ALL)
+            .border_style(Style::new().yellow());
+
+        frame.render_widget(wrapper, area);
+    }
+
+    fn draw_new_timer(&mut self, frame: &mut Frame, area: Rect) {
+        let items = ["Project 1", "Project 2", "Project 3", "Project 4"];
+        let list = List::new(items)
+            .style(Color::White)
+            .highlight_style(Modifier::REVERSED)
+            .highlight_symbol("> ");
+
+        frame.render_stateful_widget(list, area, &mut self.list_state);
+
+        let wrapper = Block::new()
+            .title_top(Line::from_iter([" Create new project ".to_span()]).left_aligned())
+            .borders(Borders::ALL)
+            .border_style(Style::new().yellow());
+
+        frame.render_widget(wrapper, area);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
