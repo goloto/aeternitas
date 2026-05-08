@@ -3,18 +3,19 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::Local;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, ToSpan},
     widgets::{Block, Borders, List, ListState, Paragraph},
 };
-use time_formating::TimeFormating;
 
+use crate::db::Db;
+
+mod db;
 mod input;
 mod time_formating;
 
@@ -26,9 +27,8 @@ pub struct App {
     should_exit: bool,
     screen: Screen,
     input: Input,
-    current_time: String,
-    project_start: Instant,
-    list_state: ListState,
+    db: Db,
+    project_list: ListState,
 }
 
 enum Screen {
@@ -43,9 +43,8 @@ impl App {
             should_exit: false,
             screen: Screen::Dashboard,
             input: Input::new(),
-            current_time: String::new(),
-            project_start: Instant::now(),
-            list_state: ListState::default().with_selected(Some(0)),
+            db: Db::new(),
+            project_list: ListState::default(),
         }
     }
 
@@ -59,7 +58,7 @@ impl App {
             let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
             if !event::poll(timeout)? {
-                self.current_time = Local::now().to_string();
+                // self.current_time = Local::now().to_string();
                 last_tick = Instant::now();
                 continue;
             }
@@ -74,19 +73,19 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let current_time_block =
-            Line::from_iter(["Now: ".to_span(), Span::from(&self.current_time)]);
-        let current_task_block = Line::from_iter([
-            "After launch: ".to_span(),
-            Span::from(TimeFormating::from_seconds(
-                self.project_start.elapsed().as_secs(),
-            )),
-        ]);
+        // let current_time_block =
+        //     Line::from_iter(["Now: ".to_span(), Span::from(&self.current_time)]);
+        // let current_task_block = Line::from_iter([
+        //     "After launch: ".to_span(),
+        //     Span::from(TimeFormating::from_seconds(
+        //         self.project_start.elapsed().as_secs(),
+        //     )),
+        // ]);
 
-        let timer_block = Block::new()
-            .title_top(Line::from("Current timer").left_aligned())
-            .borders(Borders::ALL)
-            .border_style(Style::new().gray());
+        // let timer_block = Block::new()
+        //     .title_top(Line::from("Current timer").left_aligned())
+        //     .borders(Borders::ALL)
+        //     .border_style(Style::new().gray());
 
         let layout = Layout::vertical(vec![Constraint::Min(3), Constraint::Length(3)]);
         let [main_area, hint_area] = frame.area().layout(&layout);
@@ -118,8 +117,8 @@ impl App {
                 },
                 Screen::NewTimer => match key_event.code {
                     KeyCode::Esc => self.from_screen(Screen::NewTimer),
-                    KeyCode::Char('j') | KeyCode::Down => self.list_state.select_next(),
-                    KeyCode::Char('k') | KeyCode::Up => self.list_state.select_previous(),
+                    KeyCode::Char('j') | KeyCode::Down => self.project_list.select_next(),
+                    KeyCode::Char('k') | KeyCode::Up => self.project_list.select_previous(),
                     _ => {}
                 },
                 Screen::NewProject => match key_event.code {
@@ -161,20 +160,41 @@ impl App {
     }
 
     fn draw_new_project(&mut self, frame: &mut Frame, area: Rect) {
-        let items = ["Item 1", "Item 2", "Item 3", "Item 4"];
-        let list = List::new(items)
-            .style(Color::White)
-            .highlight_style(Modifier::REVERSED)
-            .highlight_symbol("> ");
-
-        frame.render_widget(list, area);
-
         let wrapper = Block::new()
             .title_top(Line::from_iter([" Create new project ".to_span()]).left_aligned())
             .borders(Borders::ALL)
             .border_style(Style::new().yellow());
 
+        let layout = Layout::new(
+            Direction::Vertical,
+            [
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Min(1),
+            ],
+        );
+        let [input_title_area, input_area, projects_list_area] =
+            wrapper.inner(area).layout(&layout);
+
+        let input_block_title = Paragraph::new("Type name:");
+        let input_block = Paragraph::new(String::from(&self.input.input));
+
+        let db_items = self.db.projects_list();
+        let names = db_items.iter().map(|item| item.name.clone());
+        let list = List::new(names)
+            .style(Color::White)
+            .highlight_style(Modifier::REVERSED)
+            .highlight_symbol("> ");
+
+        frame.set_cursor_position(Position::new(
+            input_area.x + u16::try_from(self.input.character_index).unwrap_or(0),
+            input_area.y,
+        ));
+
         frame.render_widget(wrapper, area);
+        frame.render_widget(input_block_title, input_title_area);
+        frame.render_widget(input_block, input_area);
+        frame.render_widget(list, projects_list_area);
     }
 
     fn draw_new_timer(&mut self, frame: &mut Frame, area: Rect) {
@@ -184,7 +204,7 @@ impl App {
             .highlight_style(Modifier::REVERSED)
             .highlight_symbol("> ");
 
-        frame.render_stateful_widget(list, area, &mut self.list_state);
+        frame.render_stateful_widget(list, area, &mut self.project_list);
 
         let wrapper = Block::new()
             .title_top(Line::from_iter([" Create new project ".to_span()]).left_aligned())
@@ -258,6 +278,6 @@ impl App {
     }
 
     fn submit_new_project(&mut self) {
-        todo!()
+        self.db.add_new_project(&self.input.input);
     }
 }
