@@ -170,21 +170,26 @@ impl App {
             [
                 Constraint::Length(1),
                 Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
                 Constraint::Min(1),
             ],
         );
-        let [input_title_area, input_area, projects_list_area] =
-            wrapper.inner(area).layout(&layout);
+        let [
+            input_title_area,
+            input_area,
+            _empty_line,
+            projects_list_title_area,
+            projects_list_area,
+        ] = wrapper.inner(area).layout(&layout);
 
-        let input_block_title = Paragraph::new("Type name:");
-        let input_block = Paragraph::new(String::from(&self.input.input));
+        let input_title = Paragraph::new("Type here:").dark_gray().bold();
+        let input = Paragraph::new(String::from(&self.input.input));
 
         let db_items = self.db.projects_list();
         let names = db_items.iter().map(|item| item.name.clone());
-        let list = List::new(names)
-            .style(Color::White)
-            .highlight_style(Modifier::REVERSED)
-            .highlight_symbol("> ");
+        let projects_list_title = Paragraph::new("Existed projects:").dark_gray().bold();
+        let projects_list = List::new(names).style(Color::White);
 
         frame.set_cursor_position(Position::new(
             input_area.x + u16::try_from(self.input.character_index).unwrap_or(0),
@@ -192,9 +197,10 @@ impl App {
         ));
 
         frame.render_widget(wrapper, area);
-        frame.render_widget(input_block_title, input_title_area);
-        frame.render_widget(input_block, input_area);
-        frame.render_widget(list, projects_list_area);
+        frame.render_widget(input_title, input_title_area);
+        frame.render_widget(input, input_area);
+        frame.render_widget(projects_list_title, projects_list_title_area);
+        frame.render_widget(projects_list, projects_list_area);
     }
 
     fn draw_new_timer(&mut self, frame: &mut Frame, area: Rect) {
@@ -279,5 +285,7 @@ impl App {
 
     fn submit_new_project(&mut self) {
         self.db.add_new_project(&self.input.input);
+        self.input.input = String::new();
+        self.input.character_index = 0;
     }
 }
