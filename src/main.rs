@@ -275,6 +275,10 @@ impl App {
 
     fn to_screen(&mut self, screen: Screen) {
         match screen {
+            Screen::NewTimer => {
+                self.project_list.select(Some(0));
+                self.screen = screen;
+            }
             Screen::NewProject => {
                 self.input = Input::new();
                 self.screen = screen;
