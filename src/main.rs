@@ -161,7 +161,7 @@ impl App {
 
     fn draw_new_project(&mut self, frame: &mut Frame, area: Rect) {
         let wrapper = Block::new()
-            .title_top(Line::from_iter([" Create new project ".to_span()]).left_aligned())
+            .title_top(Line::from_iter([" New project ".to_span()]).left_aligned())
             .borders(Borders::ALL)
             .border_style(Style::new().yellow());
 
@@ -183,11 +183,11 @@ impl App {
             projects_list_area,
         ] = wrapper.inner(area).layout(&layout);
 
-        let input_title = Paragraph::new("Type here:").dark_gray().bold();
+        let input_title = Paragraph::new("Type name here:").dark_gray().bold();
         let input = Paragraph::new(String::from(&self.input.input));
 
         let db_items = self.db.projects_list();
-        let names = db_items.iter().map(|item| item.name.clone());
+        let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
         let projects_list_title = Paragraph::new("Existed projects:").dark_gray().bold();
         let projects_list = List::new(names).style(Color::White);
 
@@ -204,20 +204,28 @@ impl App {
     }
 
     fn draw_new_timer(&mut self, frame: &mut Frame, area: Rect) {
-        let items = ["Project 1", "Project 2", "Project 3", "Project 4"];
-        let list = List::new(items)
+        let db_items = self.db.projects_list();
+        let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
+
+        let wrapper = Block::new()
+            .title_top(Line::from_iter([" New timer ".to_span()]).left_aligned())
+            .borders(Borders::ALL)
+            .border_style(Style::new().yellow());
+        let layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Length(1), Constraint::Min(1)],
+        );
+        let [title_area, list_area] = layout.areas(wrapper.inner(area));
+
+        let title = Paragraph::new("Select project:").bold().dark_gray();
+        let list = List::new(names)
             .style(Color::White)
             .highlight_style(Modifier::REVERSED)
             .highlight_symbol("> ");
 
-        frame.render_stateful_widget(list, area, &mut self.project_list);
-
-        let wrapper = Block::new()
-            .title_top(Line::from_iter([" Create new project ".to_span()]).left_aligned())
-            .borders(Borders::ALL)
-            .border_style(Style::new().yellow());
-
         frame.render_widget(wrapper, area);
+        frame.render_widget(title, title_area);
+        frame.render_stateful_widget(list, list_area, &mut self.project_list);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
