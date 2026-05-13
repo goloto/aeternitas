@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use rusqlite::{Connection, Error};
+use rusqlite::Connection;
 
 pub struct Db {
     connection: Connection,
@@ -52,7 +52,7 @@ impl Db {
                 id         INTEGER PRIMARY KEY,
                 project_id INTEGER NOT NULL REFERENCES projects(id),
                 started_at INTEGER NOT NULL,
-                stopped_at INTEGER
+                stopped_at INTEGER DEFAULT NULL
             );",
             [],
         ) {
@@ -63,7 +63,7 @@ impl Db {
 
     pub fn add_new_project(&self, name: &str) {
         self.connection
-            .execute("INSERT INTO projects (name) VALUES (?1)", &[name])
+            .execute("INSERT INTO projects (name) VALUES (?1);", &[name])
             .expect("Could not add new project to db");
     }
 
@@ -72,31 +72,33 @@ impl Db {
             panic!("There is already running timer!")
         }
 
-        let sys_time: i64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Could not calculate current time")
-            .as_secs() as i64;
+        let sys_time = Db::current_time();
         self.connection
             .execute(
-                "INSERT INTO timers (project_id, started_at) VALUES (?1, ?2)",
+                "INSERT INTO timers (project_id, started_at) VALUES (?1, ?2);",
                 [project_id, sys_time],
             )
             .expect("Could not insert new timer to db");
     }
 
-    pub fn stop_timer(&self, project_id: i64) {
+    pub fn stop_timer(&self) {
         if !self.check_is_running_timer() {
             panic!("There is no running timer!")
         }
 
-        let sys_time: i64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Could not calculate current time")
-            .as_secs() as i64;
+        let sys_time = Db::current_time();
+        let timer_id: i64 = self
+            .connection
+            .query_row(
+                "SELECT id FROM timers WHERE stopped_at IS NULL;",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Could not select id for current timer");
         self.connection
             .execute(
-                "INSERT INTO timers (project_id, stoppe_at) VALUES (?1, ?2)",
-                [project_id, sys_time],
+                "UPDATE timers SET stopped_at = ?1 WHERE id = ?2;",
+                [sys_time, timer_id],
             )
             .expect("Could not insert new timer to db");
     }
@@ -104,7 +106,7 @@ impl Db {
     pub fn projects_list(&self) -> Vec<DbProject> {
         let mut query = self
             .connection
-            .prepare("SELECT id, name FROM projects")
+            .prepare("SELECT id, name FROM projects;")
             .expect("Could not select projects from db");
         let projects = query
             .query_map([], |row| {
@@ -130,9 +132,11 @@ impl Db {
     pub fn check_is_running_timer(&self) -> bool {
         let running_timer_id: i64 = self
             .connection
-            .query_row("SELECT id FROM timers WHERE stopped_at = NULL", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT id FROM timers WHERE stopped_at IS NULL;",
+                [],
+                |row| row.get(0),
+            )
             .unwrap_or_else(|_e| -1);
 
         running_timer_id != -1
@@ -141,10 +145,28 @@ impl Db {
     pub fn current_timer(&self) -> i64 {
         self.connection
             .query_row(
-                "SELECT started_at FROM timers WHERE stopped_at = NULL",
+                "SELECT started_at FROM timers WHERE stopped_at IS NULL;",
                 [],
-                |row| row.get(2),
+                |row| row.get(0),
             )
             .expect("Could not retrive current timer")
+    }
+
+    fn current_time() -> i64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Could not calculate current time")
+            .as_secs() as i64
+    }
+
+    pub fn reset(&self) {
+        self.connection
+            .execute("DROP TABLE IF EXISTS projects", [])
+            .expect("Could not drop projects table");
+        self.connection
+            .execute("DROP TABLE IF EXISTS timers", [])
+            .expect("Could not drop timers table");
+
+        self.migrate_v1();
     }
 }

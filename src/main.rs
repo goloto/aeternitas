@@ -119,6 +119,7 @@ impl App {
                 Screen::Dashboard => match key_event.code {
                     KeyCode::Char('s') => self.manage_timer(),
                     KeyCode::Char('p') => self.to_screen(Screen::NewProject),
+                    KeyCode::Char('r') => self.db.reset(),
                     KeyCode::Char('q') => self.exit(),
                     _ => {}
                 },
@@ -126,7 +127,7 @@ impl App {
                     KeyCode::Esc => self.from_screen(Screen::TimerManager),
                     KeyCode::Down => self.project_list.select_next(),
                     KeyCode::Up => self.project_list.select_previous(),
-                    KeyCode::Enter => self.submit_new_timer(),
+                    KeyCode::Enter => self.start_timer(),
                     _ => {}
                 },
                 Screen::NewProject => match key_event.code {
@@ -276,6 +277,8 @@ impl App {
                     timer_hint.to_span(),
                     "<P>".bold(),
                     " New project, ".to_span(),
+                    "<R>".bold(),
+                    " Reset DB, ".to_span(),
                     "<Q>".bold(),
                     " Exit ".to_span(),
                 ]));
@@ -352,13 +355,13 @@ impl App {
 
     fn manage_timer(&mut self) {
         if self.db.check_is_running_timer() {
-            self.db.stop_timer(self.current_timer_id());
+            self.db.stop_timer();
         } else {
             self.to_screen(Screen::TimerManager);
         }
     }
 
-    fn submit_new_timer(&mut self) {
+    fn start_timer(&mut self) {
         self.db.start_timer(self.current_timer_id());
         self.screen = Screen::Dashboard;
     }
