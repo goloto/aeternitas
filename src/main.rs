@@ -13,7 +13,10 @@ use ratatui::{
     widgets::{Block, Borders, List, ListState, Paragraph},
 };
 
-use crate::{db::Db, time_formating::TimeFormating};
+use crate::{
+    db::{Db, DbProject},
+    time_formating::TimeFormating,
+};
 
 mod db;
 mod input;
@@ -84,7 +87,7 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let layout = Layout::vertical(vec![
             Constraint::Min(3),
-            Constraint::Length(3),
+            Constraint::Length(4),
             Constraint::Length(3),
         ]);
         let [main_area, timer_area, hint_area] = frame.area().layout(&layout);
@@ -235,23 +238,33 @@ impl App {
     fn draw_timer(&mut self, frame: &mut Frame, area: Rect) {
         let is_running = self.db.check_is_running_timer();
 
-        let block = if is_running {
-            let wrapper = Block::new()
-                .borders(Borders::ALL)
-                .border_style(Color::Green);
-
-            Paragraph::new(Line::from_iter([
-                "Running timer: ".to_span().green(),
-                Span::from(&self.timer).green().bold(),
-            ]))
-            .block(wrapper)
+        let wrapper = Block::new().borders(Borders::ALL);
+        let wrapper = if is_running {
+            wrapper.border_style(Color::Green)
         } else {
-            let wrapper = Block::new().borders(Borders::ALL).border_style(Color::Red);
-
-            Paragraph::new(Line::from_iter(["Timer not running".to_span().red()])).block(wrapper)
+            wrapper.border_style(Color::Red)
         };
 
-        frame.render_widget(block, area);
+        let columns_layout = Layout::new(
+            Direction::Horizontal,
+            [Constraint::Percentage(50), Constraint::Percentage(50)],
+        );
+        let rows_layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Length(1), Constraint::Length(1)],
+        );
+        let [timer_area, project_area] = columns_layout.areas(wrapper.inner(area));
+        let [timer_title_area, timer_area] = rows_layout.areas(timer_area);
+        let [project_title_area, project_area] = rows_layout.areas(project_area);
+
+        frame.render_widget(wrapper, area);
+        frame.render_widget(Paragraph::new("Timer:").dark_gray(), timer_title_area);
+        frame.render_widget(Paragraph::new(self.timer.clone()), timer_area);
+        frame.render_widget(Paragraph::new("Project:").dark_gray(), project_title_area);
+        frame.render_widget(
+            Paragraph::new(self.current_timer_project().name),
+            project_area,
+        );
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
@@ -328,7 +341,7 @@ impl App {
         }
     }
 
-    fn current_timer_id(&self) -> i64 {
+    fn current_timer_project(&self) -> DbProject {
         let selected = self
             .project_list
             .selected()
@@ -338,7 +351,7 @@ impl App {
             .get(selected)
             .expect("Something bad happened to selected project in list");
 
-        project.id
+        project.clone()
     }
 
     fn submit_new_project(&mut self) {
@@ -356,7 +369,7 @@ impl App {
     }
 
     fn start_timer(&mut self) {
-        self.db.start_timer(self.current_timer_id());
+        self.db.start_timer(self.current_timer_project().id);
         self.screen = Screen::Dashboard;
     }
 }

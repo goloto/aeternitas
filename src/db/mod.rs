@@ -15,6 +15,15 @@ pub struct DbProject {
     pub name: String,
 }
 
+impl Clone for DbProject {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            name: self.name.clone(),
+        }
+    }
+}
+
 impl Db {
     pub fn new() -> Self {
         let connection = Connection::open(Db::db_path()).expect("Could not open db");
