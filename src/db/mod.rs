@@ -67,7 +67,7 @@ impl Db {
             .expect("Could not add new project to db");
     }
 
-    pub fn start_timer(&self, project: &String) {
+    pub fn start_timer(&self, project_id: i64) {
         if self.check_is_running_timer() {
             panic!("There is already running timer!")
         }
@@ -76,9 +76,6 @@ impl Db {
             .duration_since(UNIX_EPOCH)
             .expect("Could not calculate current time")
             .as_secs() as i64;
-        let project_id = self
-            .project_id_by_name(project)
-            .expect("Could not retrive project id from db");
         self.connection
             .execute(
                 "INSERT INTO timers (project_id, started_at) VALUES (?1, ?2)",
@@ -87,14 +84,15 @@ impl Db {
             .expect("Could not insert new timer to db");
     }
 
-    pub fn stop_timer(&self, project: &String) {
+    pub fn stop_timer(&self, project_id: i64) {
+        if !self.check_is_running_timer() {
+            panic!("There is no running timer!")
+        }
+
         let sys_time: i64 = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Could not calculate current time")
             .as_secs() as i64;
-        let project_id = self
-            .project_id_by_name(project)
-            .expect("Could not retrive project id from db");
         self.connection
             .execute(
                 "INSERT INTO timers (project_id, stoppe_at) VALUES (?1, ?2)",
@@ -129,23 +127,24 @@ impl Db {
         projects_vec
     }
 
-    fn running_timer(&self) -> Result<String, Error> {
-        self.connection
+    pub fn check_is_running_timer(&self) -> bool {
+        let running_timer_id: i64 = self
+            .connection
             .query_row("SELECT id FROM timers WHERE stopped_at = NULL", [], |row| {
                 row.get(0)
             })
+            .unwrap_or_else(|_e| -1);
+
+        running_timer_id != -1
     }
 
-    fn check_is_running_timer(&self) -> bool {
-        let running_timer_id: String = self.running_timer().unwrap_or_else(|_e| "-1".to_string());
-
-        running_timer_id != "-1"
-    }
-
-    fn project_id_by_name(&self, name: &String) -> Result<i64, Error> {
+    pub fn current_timer(&self) -> i64 {
         self.connection
-            .query_row("SELECT id FROM projects WHERE name = ?1", [name], |row| {
-                row.get(1)
-            })
+            .query_row(
+                "SELECT started_at FROM timers WHERE stopped_at = NULL",
+                [],
+                |row| row.get(2),
+            )
+            .expect("Could not retrive current timer")
     }
 }

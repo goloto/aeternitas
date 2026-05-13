@@ -33,7 +33,7 @@ pub struct App {
 
 enum Screen {
     Dashboard,
-    NewTimer,
+    TimerManager,
     NewProject,
 }
 
@@ -44,7 +44,7 @@ impl App {
             screen: Screen::Dashboard,
             input: Input::new(),
             db: Db::new(),
-            project_list: ListState::default(),
+            project_list: ListState::default().with_selected(Some(0)),
         }
     }
 
@@ -87,20 +87,27 @@ impl App {
         //     .borders(Borders::ALL)
         //     .border_style(Style::new().gray());
 
-        let layout = Layout::vertical(vec![Constraint::Min(3), Constraint::Length(3)]);
-        let [main_area, hint_area] = frame.area().layout(&layout);
+        let layout = Layout::vertical(vec![
+            Constraint::Min(3),
+            Constraint::Length(3),
+            Constraint::Length(3),
+        ]);
+        let [main_area, timer_area, hint_area] = frame.area().layout(&layout);
 
         match self.screen {
             Screen::Dashboard => {
                 self.draw_dashboard(frame, main_area);
+                self.draw_timer(frame, timer_area);
                 self.draw_hint(frame, hint_area);
             }
-            Screen::NewTimer => {
-                self.draw_new_timer(frame, main_area);
+            Screen::TimerManager => {
+                self.draw_timer_manager(frame, main_area);
+                self.draw_timer(frame, timer_area);
                 self.draw_hint(frame, hint_area);
             }
             Screen::NewProject => {
                 self.draw_new_project(frame, main_area);
+                self.draw_timer(frame, timer_area);
                 self.draw_hint(frame, hint_area);
             }
         };
@@ -110,15 +117,16 @@ impl App {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match self.screen {
                 Screen::Dashboard => match key_event.code {
-                    KeyCode::Char('n') => self.to_screen(Screen::NewTimer),
+                    KeyCode::Char('s') => self.manage_timer(),
                     KeyCode::Char('p') => self.to_screen(Screen::NewProject),
                     KeyCode::Char('q') => self.exit(),
                     _ => {}
                 },
-                Screen::NewTimer => match key_event.code {
-                    KeyCode::Esc => self.from_screen(Screen::NewTimer),
-                    KeyCode::Char('j') | KeyCode::Down => self.project_list.select_next(),
-                    KeyCode::Char('k') | KeyCode::Up => self.project_list.select_previous(),
+                Screen::TimerManager => match key_event.code {
+                    KeyCode::Esc => self.from_screen(Screen::TimerManager),
+                    KeyCode::Down => self.project_list.select_next(),
+                    KeyCode::Up => self.project_list.select_previous(),
+                    KeyCode::Enter => self.submit_new_timer(),
                     _ => {}
                 },
                 Screen::NewProject => match key_event.code {
@@ -203,7 +211,7 @@ impl App {
         frame.render_widget(projects_list, projects_list_area);
     }
 
-    fn draw_new_timer(&mut self, frame: &mut Frame, area: Rect) {
+    fn draw_timer_manager(&mut self, frame: &mut Frame, area: Rect) {
         let db_items = self.db.projects_list();
         let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
 
@@ -228,6 +236,29 @@ impl App {
         frame.render_stateful_widget(list, list_area, &mut self.project_list);
     }
 
+    fn draw_timer(&mut self, frame: &mut Frame, area: Rect) {
+        let is_running = self.db.check_is_running_timer();
+
+        let block = if is_running {
+            let timer = self.db.current_timer();
+            let wrapper = Block::new()
+                .borders(Borders::ALL)
+                .border_style(Color::Green);
+
+            Paragraph::new(Line::from_iter([
+                "Running timer: ".to_span().green(),
+                Span::from(timer.to_string()).green().bold(),
+            ]))
+            .block(wrapper)
+        } else {
+            let wrapper = Block::new().borders(Borders::ALL).border_style(Color::Red);
+
+            Paragraph::new(Line::from_iter(["Timer not running".to_span().red()])).block(wrapper)
+        };
+
+        frame.render_widget(block, area);
+    }
+
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
         let wrapper = Block::new()
             .borders(Borders::ALL)
@@ -235,9 +266,14 @@ impl App {
 
         match self.screen {
             Screen::Dashboard => {
+                let timer_hint = if self.db.check_is_running_timer() {
+                    " Stop timer, "
+                } else {
+                    " Start timer, "
+                };
                 let hint = Paragraph::new(Line::from_iter([
-                    "<N>".bold(),
-                    " New timer, ".to_span(),
+                    "<S>".bold(),
+                    timer_hint.to_span(),
                     "<P>".bold(),
                     " New project, ".to_span(),
                     "<Q>".bold(),
@@ -256,7 +292,7 @@ impl App {
 
                 frame.render_widget(hint.block(wrapper), area);
             }
-            Screen::NewTimer => {
+            Screen::TimerManager => {
                 let hint = Paragraph::new(Line::from_iter([
                     "<Up/Down/Enter>".bold(),
                     " Select project, ".to_span(),
@@ -275,7 +311,7 @@ impl App {
 
     fn to_screen(&mut self, screen: Screen) {
         match screen {
-            Screen::NewTimer => {
+            Screen::TimerManager => {
                 self.project_list.select(Some(0));
                 self.screen = screen;
             }
@@ -290,14 +326,40 @@ impl App {
     fn from_screen(&mut self, screen: Screen) {
         match screen {
             Screen::NewProject => self.screen = Screen::Dashboard,
-            Screen::NewTimer => self.screen = Screen::Dashboard,
+            Screen::TimerManager => self.screen = Screen::Dashboard,
             _ => {}
         }
+    }
+
+    fn current_timer_id(&self) -> i64 {
+        let selected = self
+            .project_list
+            .selected()
+            .expect("Some error while submiting timer with selected project");
+        let projects = self.db.projects_list();
+        let project = projects
+            .get(selected)
+            .expect("Something bad happened to selected project in list");
+
+        project.id
     }
 
     fn submit_new_project(&mut self) {
         self.db.add_new_project(&self.input.input);
         self.input.input = String::new();
         self.input.character_index = 0;
+    }
+
+    fn manage_timer(&mut self) {
+        if self.db.check_is_running_timer() {
+            self.db.stop_timer(self.current_timer_id());
+        } else {
+            self.to_screen(Screen::TimerManager);
+        }
+    }
+
+    fn submit_new_timer(&mut self) {
+        self.db.start_timer(self.current_timer_id());
+        self.screen = Screen::Dashboard;
     }
 }
