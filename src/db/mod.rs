@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use rusqlite::Connection;
+use rusqlite::{Connection, Error};
 
 pub struct Db {
     connection: Connection,
@@ -143,13 +143,17 @@ impl Db {
     }
 
     pub fn current_timer(&self) -> i64 {
-        self.connection
-            .query_row(
-                "SELECT started_at FROM timers WHERE stopped_at IS NULL;",
-                [],
-                |row| row.get(0),
-            )
-            .expect("Could not retrive current timer")
+        let result: Result<i64, Error> = self.connection.query_row(
+            "SELECT started_at FROM timers WHERE stopped_at IS NULL;",
+            [],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(timer) => timer,
+            _ => -1,
+        }
+
     }
 
     fn current_time() -> i64 {
