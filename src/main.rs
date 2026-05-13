@@ -1,6 +1,6 @@
 use std::{
     io,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -13,7 +13,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListState, Paragraph},
 };
 
-use crate::db::Db;
+use crate::{db::Db, time_formating::TimeFormating};
 
 mod db;
 mod input;
@@ -29,6 +29,7 @@ pub struct App {
     input: Input,
     db: Db,
     project_list: ListState,
+    timer: String,
 }
 
 enum Screen {
@@ -45,6 +46,7 @@ impl App {
             input: Input::new(),
             db: Db::new(),
             project_list: ListState::default().with_selected(Some(0)),
+            timer: String::new(),
         }
     }
 
@@ -58,7 +60,14 @@ impl App {
             let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
             if !event::poll(timeout)? {
-                // self.current_time = Local::now().to_string();
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Could not calculate current time")
+                    .as_secs() as i64;
+                let diff = now - self.db.current_timer();
+                let diff_formatted = TimeFormating::from_seconds(diff as u64);
+
+                self.timer = diff_formatted;
                 last_tick = Instant::now();
                 continue;
             }
@@ -73,20 +82,6 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        // let current_time_block =
-        //     Line::from_iter(["Now: ".to_span(), Span::from(&self.current_time)]);
-        // let current_task_block = Line::from_iter([
-        //     "After launch: ".to_span(),
-        //     Span::from(TimeFormating::from_seconds(
-        //         self.project_start.elapsed().as_secs(),
-        //     )),
-        // ]);
-
-        // let timer_block = Block::new()
-        //     .title_top(Line::from("Current timer").left_aligned())
-        //     .borders(Borders::ALL)
-        //     .border_style(Style::new().gray());
-
         let layout = Layout::vertical(vec![
             Constraint::Min(3),
             Constraint::Length(3),
@@ -241,14 +236,13 @@ impl App {
         let is_running = self.db.check_is_running_timer();
 
         let block = if is_running {
-            let timer = self.db.current_timer();
             let wrapper = Block::new()
                 .borders(Borders::ALL)
                 .border_style(Color::Green);
 
             Paragraph::new(Line::from_iter([
                 "Running timer: ".to_span().green(),
-                Span::from(timer.to_string()).green().bold(),
+                Span::from(&self.timer).green().bold(),
             ]))
             .block(wrapper)
         } else {
