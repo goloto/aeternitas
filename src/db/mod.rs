@@ -1,10 +1,11 @@
 use std::{
     fs,
     path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use rusqlite::{Connection, Error};
+
+use crate::time_formating::TimeFormating;
 
 pub struct Db {
     connection: Connection,
@@ -81,7 +82,7 @@ impl Db {
             panic!("There is already running timer!")
         }
 
-        let sys_time = Db::current_time();
+        let sys_time = TimeFormating::current_time();
         self.connection
             .execute(
                 "INSERT INTO timers (project_id, started_at) VALUES (?1, ?2);",
@@ -95,7 +96,7 @@ impl Db {
             panic!("There is no running timer!")
         }
 
-        let sys_time = Db::current_time();
+        let sys_time = TimeFormating::current_time();
         let timer_id: i64 = self
             .connection
             .query_row(
@@ -163,13 +164,6 @@ impl Db {
             _ => -1,
         }
 
-    }
-
-    fn current_time() -> i64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Could not calculate current time")
-            .as_secs() as i64
     }
 
     pub fn reset(&self) {

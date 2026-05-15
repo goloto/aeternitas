@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 pub struct TimeFormating {}
 
 const SECONDS_IN_DAY: u64 = 60 * 60 * 24;
@@ -33,5 +35,16 @@ impl TimeFormating {
         } else {
             format!("{seconds}s")
         }
+    }
+
+    pub fn current_time() -> i64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Could not calculate current time")
+            .as_secs() as i64
+    }
+
+    pub fn time_diff(time: i64) -> i64 {
+        TimeFormating::current_time() - time
     }
 }

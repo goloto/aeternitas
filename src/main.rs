@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, Borders, List, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListState, Padding, Paragraph},
 };
 
 use crate::{
@@ -33,6 +33,7 @@ pub struct App {
     db: Db,
     project_list: ListState,
     timer: String,
+    project: String,
 }
 
 enum Screen {
@@ -49,7 +50,8 @@ impl App {
             input: Input::new(),
             db: Db::new(),
             project_list: ListState::default().with_selected(Some(0)),
-            timer: String::new(),
+            timer: String::from("-"),
+            project: String::from("-"),
         }
     }
 
@@ -63,14 +65,11 @@ impl App {
             let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
             if !event::poll(timeout)? {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Could not calculate current time")
-                    .as_secs() as i64;
-                let diff = now - self.db.current_timer();
+                let diff = TimeFormating::time_diff(self.db.current_timer());
                 let diff_formatted = TimeFormating::from_seconds(diff as u64);
 
                 self.timer = diff_formatted;
+                self.project = self.current_timer_project().name;
                 last_tick = Instant::now();
                 continue;
             }
@@ -161,7 +160,8 @@ impl App {
                 .left_aligned(),
             )
             .borders(Borders::ALL)
-            .border_style(Style::new().cyan());
+            .border_style(Style::new().cyan())
+            .padding(Padding::horizontal(1));
 
         frame.render_widget(dashboard, area);
     }
@@ -170,7 +170,8 @@ impl App {
         let wrapper = Block::new()
             .title_top(Line::from_iter([" New project ".to_span()]).left_aligned())
             .borders(Borders::ALL)
-            .border_style(Style::new().yellow());
+            .border_style(Style::new().yellow())
+            .padding(Padding::horizontal(1));
 
         let layout = Layout::new(
             Direction::Vertical,
@@ -217,7 +218,8 @@ impl App {
         let wrapper = Block::new()
             .title_top(Line::from_iter([" New timer ".to_span()]).left_aligned())
             .borders(Borders::ALL)
-            .border_style(Style::new().yellow());
+            .border_style(Style::new().yellow())
+            .padding(Padding::horizontal(1));
         let layout = Layout::new(
             Direction::Vertical,
             [Constraint::Length(1), Constraint::Min(1)],
@@ -237,8 +239,20 @@ impl App {
 
     fn draw_timer(&mut self, frame: &mut Frame, area: Rect) {
         let is_running = self.db.check_is_running_timer();
+        let timer = if is_running {
+            Paragraph::new(self.timer.clone()).bold()
+        } else {
+            Paragraph::new("-").dark_gray()
+        };
+        let project = if is_running {
+            Paragraph::new(self.project.clone()).bold()
+        } else {
+            Paragraph::new("-").dark_gray()
+        };
 
-        let wrapper = Block::new().borders(Borders::ALL);
+        let wrapper = Block::new()
+            .borders(Borders::ALL)
+            .padding(Padding::horizontal(1));
         let wrapper = if is_running {
             wrapper.border_style(Color::Green)
         } else {
@@ -259,18 +273,16 @@ impl App {
 
         frame.render_widget(wrapper, area);
         frame.render_widget(Paragraph::new("Timer:").dark_gray(), timer_title_area);
-        frame.render_widget(Paragraph::new(self.timer.clone()), timer_area);
+        frame.render_widget(timer, timer_area);
         frame.render_widget(Paragraph::new("Project:").dark_gray(), project_title_area);
-        frame.render_widget(
-            Paragraph::new(self.current_timer_project().name),
-            project_area,
-        );
+        frame.render_widget(project, project_area);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
         let wrapper = Block::new()
             .borders(Borders::ALL)
-            .border_style(Style::new().gray());
+            .border_style(Style::new().gray())
+            .padding(Padding::horizontal(1));
 
         match self.screen {
             Screen::Dashboard => {
@@ -370,6 +382,8 @@ impl App {
 
     fn start_timer(&mut self) {
         self.db.start_timer(self.current_timer_project().id);
+        self.timer = String::from("0s");
+        self.project = self.current_timer_project().name;
         self.screen = Screen::Dashboard;
     }
 }
