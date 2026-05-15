@@ -281,34 +281,37 @@ impl App {
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
         let wrapper = Block::new()
             .borders(Borders::ALL)
-            .border_style(Style::new().gray())
+            .border_style(Style::new().light_yellow())
             .padding(Padding::horizontal(1));
 
         match self.screen {
             Screen::Dashboard => {
                 let timer_hint = if self.db.check_is_running_timer() {
-                    " Stop timer, "
+                    "top timer | "
                 } else {
-                    " Start timer, "
+                    "tart timer | "
                 };
                 let hint = Paragraph::new(Line::from_iter([
-                    "<S>".bold(),
+                    "S".to_span().bold().light_yellow(),
                     timer_hint.to_span(),
-                    "<P>".bold(),
-                    " New project, ".to_span(),
-                    "<R>".bold(),
-                    " Reset DB, ".to_span(),
-                    "<Q>".bold(),
-                    " Exit ".to_span(),
+                    " New ".to_span(),
+                    "P".to_span().bold().light_yellow(),
+                    "roject | ".to_span(),
+                    " ".to_span(),
+                    "R".to_span().bold().light_yellow(),
+                    "eset DB | ".to_span(),
+                    " ".to_span(),
+                    "Q".bold().light_yellow(),
+                    "uit ".to_span(),
                 ]));
 
                 frame.render_widget(hint.block(wrapper), area);
             }
             Screen::NewProject => {
                 let hint = Paragraph::new(Line::from_iter([
-                    "<Enter>".bold(),
-                    " Submit, ".to_span(),
-                    "<ESC>".bold(),
+                    "<Enter>".bold().light_yellow(),
+                    " Submit | ".to_span(),
+                    "<ESC>".bold().light_yellow(),
                     " Cancel ".to_span(),
                 ]));
 
@@ -316,9 +319,9 @@ impl App {
             }
             Screen::TimerManager => {
                 let hint = Paragraph::new(Line::from_iter([
-                    "<Up/Down/Enter>".bold(),
-                    " Select project, ".to_span(),
-                    "<ESC>".bold(),
+                    "<Up/Down/Enter>".bold().light_yellow(),
+                    " Select project | ".to_span(),
+                    "<ESC>".bold().light_yellow(),
                     " Cancel ".to_span(),
                 ]));
 
