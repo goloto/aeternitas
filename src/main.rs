@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, Borders, List, ListState, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListState, Padding, Paragraph},
 };
 
 use crate::{
@@ -57,6 +57,7 @@ impl App {
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let mut last_tick = Instant::now();
+        self.on_tick();
 
         loop {
             terminal.draw(|frame| self.draw(frame))?;
@@ -65,11 +66,7 @@ impl App {
             let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
             if !event::poll(timeout)? {
-                let diff = TimeFormating::time_diff(self.db.current_timer());
-                let diff_formatted = TimeFormating::from_seconds(diff as u64);
-
-                self.timer = diff_formatted;
-                self.project = self.current_timer_project().name;
+                self.on_tick();
                 last_tick = Instant::now();
                 continue;
             }
@@ -108,6 +105,14 @@ impl App {
                 self.draw_hint(frame, hint_area);
             }
         };
+    }
+
+    fn on_tick(&mut self) {
+        let diff = TimeFormating::time_diff(self.db.current_timer());
+        let diff_formatted = TimeFormating::from_seconds(diff as u64);
+
+        self.timer = diff_formatted;
+        self.project = self.current_timer_project().name;
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -160,6 +165,7 @@ impl App {
                 .left_aligned(),
             )
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::new().cyan())
             .padding(Padding::horizontal(1));
 
@@ -170,6 +176,7 @@ impl App {
         let wrapper = Block::new()
             .title_top(Line::from_iter([" New project ".to_span()]).left_aligned())
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::new().yellow())
             .padding(Padding::horizontal(1));
 
@@ -191,13 +198,15 @@ impl App {
             projects_list_area,
         ] = wrapper.inner(area).layout(&layout);
 
-        let input_title = Paragraph::new("Type name here:").dark_gray().bold();
-        let input = Paragraph::new(String::from(&self.input.input));
+        let input_title = Paragraph::new("Project name:").dark_gray().bold();
+        let input = Paragraph::new(String::from(&self.input.input))
+            .bg(Color::DarkGray)
+            .white();
 
         let db_items = self.db.projects_list();
         let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
         let projects_list_title = Paragraph::new("Existed projects:").dark_gray().bold();
-        let projects_list = List::new(names).style(Color::White);
+        let projects_list = List::new(names).white();
 
         frame.set_cursor_position(Position::new(
             input_area.x + u16::try_from(self.input.character_index).unwrap_or(0),
@@ -218,6 +227,7 @@ impl App {
         let wrapper = Block::new()
             .title_top(Line::from_iter([" New timer ".to_span()]).left_aligned())
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::new().yellow())
             .padding(Padding::horizontal(1));
         let layout = Layout::new(
@@ -252,6 +262,7 @@ impl App {
 
         let wrapper = Block::new()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .padding(Padding::horizontal(1));
         let wrapper = if is_running {
             wrapper.border_style(Color::Green)
@@ -281,6 +292,7 @@ impl App {
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
         let wrapper = Block::new()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::new().light_yellow())
             .padding(Padding::horizontal(1));
 
@@ -292,16 +304,16 @@ impl App {
                     "tart timer | "
                 };
                 let hint = Paragraph::new(Line::from_iter([
-                    "S".to_span().bold().light_yellow(),
+                    "S".to_span().bold().black().bg(Color::LightYellow),
                     timer_hint.to_span(),
                     " New ".to_span(),
-                    "P".to_span().bold().light_yellow(),
+                    "P".to_span().bold().black().bg(Color::LightYellow),
                     "roject | ".to_span(),
                     " ".to_span(),
-                    "R".to_span().bold().light_yellow(),
+                    "R".to_span().bold().black().bg(Color::LightYellow),
                     "eset DB | ".to_span(),
                     " ".to_span(),
-                    "Q".bold().light_yellow(),
+                    "Q".bold().black().bg(Color::LightYellow),
                     "uit ".to_span(),
                 ]));
 
@@ -309,9 +321,9 @@ impl App {
             }
             Screen::NewProject => {
                 let hint = Paragraph::new(Line::from_iter([
-                    "<Enter>".bold().light_yellow(),
+                    "<Enter>".bold().black().bg(Color::LightYellow),
                     " Submit | ".to_span(),
-                    "<ESC>".bold().light_yellow(),
+                    "<ESC>".bold().black().bg(Color::LightYellow),
                     " Cancel ".to_span(),
                 ]));
 
@@ -319,9 +331,9 @@ impl App {
             }
             Screen::TimerManager => {
                 let hint = Paragraph::new(Line::from_iter([
-                    "<Up/Down/Enter>".bold().light_yellow(),
+                    "<Up/Down/Enter>".bold().black().bg(Color::LightYellow),
                     " Select project | ".to_span(),
-                    "<ESC>".bold().light_yellow(),
+                    "<ESC>".bold().black().bg(Color::LightYellow),
                     " Cancel ".to_span(),
                 ]));
 
