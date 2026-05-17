@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, BorderType, Borders, List, ListState, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Gauge, List, ListState, Padding, Paragraph},
 };
 
 use crate::{
@@ -166,10 +166,31 @@ impl App {
             )
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::new().cyan())
+            .border_style(Style::new().yellow())
             .padding(Padding::horizontal(1));
 
+        let inner_area = dashboard.inner(area);
         frame.render_widget(dashboard, area);
+
+        let test_timers: [u16; 6] = [1, 10, 53, 25, 90, 25];
+        let constraints = test_timers.iter().map(|_| Constraint::Length(1));
+
+        let layout = Layout::new(Direction::Vertical, constraints);
+        let count = test_timers.len();
+        let areas: [Rect; 6] = inner_area.layout(&layout);
+        let mut i = 0;
+
+        while i < count {
+            let gauge = Gauge::default()
+                .style(Modifier::BOLD)
+                .gauge_style(Style::new().green().on_black())
+                .label("Year Progress")
+                .percent(test_timers[i]);
+
+            frame.render_widget(gauge, areas[i]);
+
+            i = i + 1;
+        }
     }
 
     fn draw_new_project(&mut self, frame: &mut Frame, area: Rect) {
