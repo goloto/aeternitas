@@ -108,7 +108,7 @@ impl App {
     }
 
     fn on_tick(&mut self) {
-        let diff = TimeFormating::time_diff(self.db.current_timer());
+        let diff = TimeFormating::diff_from_now(self.db.current_timer());
         let diff_formatted = TimeFormating::from_seconds(diff as u64);
 
         self.timer = diff_formatted;
@@ -397,6 +397,7 @@ impl App {
         let projects = self.db.projects_list();
         let project = projects
             .get(selected)
+            // TODO: падает при пустой БД
             .expect("Something bad happened to selected project in list");
 
         project.clone()

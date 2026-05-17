@@ -44,7 +44,7 @@ impl TimeFormating {
             .as_secs() as i64
     }
 
-    pub fn time_diff(time: i64) -> i64 {
+    pub fn diff_from_now(time: i64) -> i64 {
         TimeFormating::current_time() - time
     }
 }

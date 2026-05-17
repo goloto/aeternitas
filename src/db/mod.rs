@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
 use rusqlite::{Connection, Error};
 
@@ -46,35 +43,64 @@ impl Db {
     }
 
     fn migrate_v1(&self) {
-        match self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS projects (
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS projects (
                 id   INTEGER PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE
             );",
-            [],
-        ) {
-            Err(e) => panic!("{e}"),
-            _ => {}
-        };
+                [],
+            )
+            .expect("Something wrong while creating projects table");
 
-        match self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS timers (
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS timers (
                 id         INTEGER PRIMARY KEY,
                 project_id INTEGER NOT NULL REFERENCES projects(id),
                 started_at INTEGER NOT NULL,
                 stopped_at INTEGER DEFAULT NULL
             );",
-            [],
-        ) {
-            Err(e) => panic!("{e}"),
-            _ => {}
-        }
+                [],
+            )
+            .expect("Something wrong while creating timers table");
+
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS summary (
+                id         INTEGER PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                count      INTEGER DEFAULT NULL
+            );",
+                [],
+            )
+            .expect("Something wrong while creating summary table");
     }
 
-    pub fn add_new_project(&self, name: &str) {
-        self.connection
+    pub fn add_new_project(&mut self, name: &str) {
+        let transaction = self
+            .connection
+            .transaction()
+            .expect("Could not open transaction");
+
+        transaction
             .execute("INSERT INTO projects (name) VALUES (?1);", &[name])
             .expect("Could not add new project to db");
+        let project_id: i64 = transaction
+            .query_row("SELECT id FROM projects WHERE name = ?1", [name], |row| {
+                row.get(0)
+            })
+            .expect("Could now get id from recently created project");
+        transaction
+            .execute(
+                "INSERT INTO summary (project_id, count) VALUES (?1, 0)",
+                [project_id],
+            )
+            .expect("Could not add new summary row");
+
+        transaction
+            .commit()
+            .expect("Could not commit adding project transaction");
     }
 
     pub fn start_timer(&self, project_id: i64) {
@@ -91,26 +117,66 @@ impl Db {
             .expect("Could not insert new timer to db");
     }
 
-    pub fn stop_timer(&self) {
+    pub fn stop_timer(&mut self) {
+        // TODO
+        // 1. DONE открыть транзакцию
+        // 2. DONE получить айдишник проекта
+        // 3. DONE посчитать проведённое время
+        // 4. DONE получить текущее саммари (если есть)
+        // 5. прибавить к нему новое время
+        // 6. обновить саммари
+        // 7. DONE закрыть транзакцию
+
         if !self.check_is_running_timer() {
             panic!("There is no running timer!")
         }
 
-        let sys_time = TimeFormating::current_time();
-        let timer_id: i64 = self
+        let transaction = self
             .connection
+            .transaction()
+            .expect("Could not open transaction");
+
+        let stopped_at = TimeFormating::current_time();
+        let (timer_id, project_id): (i64, i64) = transaction
             .query_row(
-                "SELECT id FROM timers WHERE stopped_at IS NULL;",
+                "SELECT id, project_id FROM timers WHERE stopped_at IS NULL;",
                 [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("Could not select id and project_id for current timer");
+        let started_at: i64 = transaction
+            .query_row(
+                "SELECT started_at FROM timers WHERE id = ?1",
+                [timer_id],
                 |row| row.get(0),
             )
-            .expect("Could not select id for current timer");
-        self.connection
+            .expect("Could not receive time when started current timer");
+        let current_session = TimeFormating::diff_from_now(started_at);
+        let summary: i64 = transaction
+            .query_row(
+                "SELECT count FROM summary WHERE project_id = ?1",
+                [project_id],
+                |row| row.get(0),
+            )
+            .expect("Could not receive summary");
+
+        transaction
             .execute(
                 "UPDATE timers SET stopped_at = ?1 WHERE id = ?2;",
-                [sys_time, timer_id],
+                [stopped_at, timer_id],
             )
             .expect("Could not insert new timer to db");
+
+        transaction
+            .execute(
+                "UPDATE summary SET count = ?1 WHERE project_id = ?2",
+                [summary + current_session, project_id],
+            )
+            .expect("");
+
+        transaction
+            .commit()
+            .expect("Could not commit stopping timer transaction");
     }
 
     pub fn projects_list(&self) -> Vec<DbProject> {
@@ -163,7 +229,6 @@ impl Db {
             Ok(timer) => timer,
             _ => -1,
         }
-
     }
 
     pub fn reset(&self) {
@@ -173,6 +238,9 @@ impl Db {
         self.connection
             .execute("DROP TABLE IF EXISTS timers", [])
             .expect("Could not drop timers table");
+        self.connection
+            .execute("DROP TABLE IF EXISTS summary", [])
+            .expect("Could not drop summary table");
 
         self.migrate_v1();
     }
