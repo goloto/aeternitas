@@ -172,22 +172,48 @@ impl App {
         let inner_dashboard_area = dashboard.inner(area);
         frame.render_widget(dashboard, area);
 
-        let test_timers: [u16; 6] = [1, 10, 53, 25, 90, 25];
-        let constraints = test_timers.iter().map(|_| Constraint::Length(1));
-
+        let summary = self.db.summary_by_project();
+        let constraints = summary.iter().map(|_| Constraint::Length(1));
         let timers_layout = Layout::new(Direction::Vertical, constraints);
-        let timers_count = test_timers.len();
+        let timers_count = summary.len();
         let timers_areas: Vec<Rect> = inner_dashboard_area.layout_vec(&timers_layout);
         let mut i = 0;
+        let mut max = 0;
 
         while i < timers_count {
-            let gauge = Gauge::default()
-                .style(Modifier::BOLD)
-                .gauge_style(Style::new().green().on_black())
-                .label("Year Progress")
-                .percent(test_timers[i]);
+            let summary_item = summary.get(i);
+            match summary_item {
+                Some(item) => {
+                    if item.1 > max {
+                        max = item.1;
+                    }
+                }
+                None => continue,
+            }
+            i = i + 1;
+        }
 
-            frame.render_widget(gauge, timers_areas[i]);
+        i = 0;
+
+        while i < timers_count {
+            let summary_item = summary.get(i);
+            match summary_item {
+                Some(item) => {
+                    let formatted_time = TimeFormating::from_seconds(item.1 as u64);
+                    let title = item.0.clone();
+                    let title = format!("{title}, {formatted_time}");
+                    let safe_count = if item.1 == 0 { 1 } else { item.1 };
+                    let percent = 100 / (max / safe_count);
+                    let gauge = Gauge::default()
+                        .style(Modifier::BOLD)
+                        .gauge_style(Style::new().yellow().on_black())
+                        .label(title)
+                        .percent(percent as u16);
+
+                    frame.render_widget(gauge, timers_areas[i]);
+                }
+                None => continue,
+            }
 
             i = i + 1;
         }
@@ -395,10 +421,11 @@ impl App {
             .selected()
             .expect("Some error while submiting timer with selected project");
         let projects = self.db.projects_list();
-        let project = projects
-            .get(selected)
-            // TODO: падает при пустой БД
-            .expect("Something bad happened to selected project in list");
+        let empty_project = DbProject {
+            id: -1,
+            name: String::from(""),
+        };
+        let project = projects.get(selected).unwrap_or_else(|| &empty_project);
 
         project.clone()
     }

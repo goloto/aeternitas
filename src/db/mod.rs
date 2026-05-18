@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use rusqlite::{Connection, Error};
+use rusqlite::{Connection, Error, Rows, fallible_iterator::FallibleIterator};
 
 use crate::time_formating::TimeFormating;
 
@@ -243,5 +243,32 @@ impl Db {
             .expect("Could not drop summary table");
 
         self.migrate_v1();
+    }
+
+    pub fn summary_by_project(&self) -> Vec<(String, i64)> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT projects.name, summary.count
+                    FROM summary
+                    JOIN projects
+                        ON projects.id = summary.project_id;
+                ",
+            )
+            .expect("Could not prepare statement for summary");
+        let rows = statement
+            .query_map([], |row| {
+                let project_id: String = row.get(0).unwrap_or_else(|_| String::new());
+                let count: i64 = row.get(1).unwrap_or_else(|_| 0);
+
+                Ok((project_id, count))
+            })
+            .expect("Error while quering summary");
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row.expect("Could not unwrap row for summary"));
+        }
+
+        result
     }
 }
