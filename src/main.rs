@@ -203,7 +203,7 @@ impl App {
                     let title = item.0.clone();
                     let title = format!("{title}, {formatted_time}");
                     let safe_count = if item.1 == 0 { 1 } else { item.1 };
-                    let percent = 100 / (max / safe_count);
+                    let percent = 100. / (max as f64 / safe_count as f64);
                     let gauge = Gauge::default()
                         .style(Modifier::BOLD)
                         .gauge_style(Style::new().yellow().on_black())
