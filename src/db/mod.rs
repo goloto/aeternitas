@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use rusqlite::{Connection, Error, Rows, fallible_iterator::FallibleIterator};
+use rusqlite::{Connection, Error};
 
 use crate::time_formating::TimeFormating;
 
@@ -118,15 +118,6 @@ impl Db {
     }
 
     pub fn stop_timer(&mut self) {
-        // TODO
-        // 1. DONE открыть транзакцию
-        // 2. DONE получить айдишник проекта
-        // 3. DONE посчитать проведённое время
-        // 4. DONE получить текущее саммари (если есть)
-        // 5. прибавить к нему новое время
-        // 6. обновить саммари
-        // 7. DONE закрыть транзакцию
-
         if !self.check_is_running_timer() {
             panic!("There is no running timer!")
         }

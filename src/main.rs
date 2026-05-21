@@ -1,16 +1,16 @@
 use std::{
     io,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Direction, Layout, Position, Rect},
+    layout::{Constraint, Direction, HorizontalAlignment, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, BorderType, Borders, Gauge, List, ListState, Padding, Paragraph},
+    widgets::{Block, Gauge, List, ListState, Padding, Paragraph},
 };
 
 use crate::{
@@ -21,6 +21,11 @@ use crate::{
 mod db;
 mod input;
 mod time_formating;
+
+const ACCENT_COLOR: u8 = 204;
+const SHADOWED_COLOR: u8 = 244;
+const GAUGE_COLOR: u8 = 066;
+const RUNNING_TIMER_COLOR: u8 = 114;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
@@ -81,28 +86,66 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
+        let project_count = self.db.projects_list().len() as u16;
+        let empty_dashboard_height = if project_count > 0 { project_count } else { 3 };
+        let dashboard_height = match self.screen {
+            Screen::NewProject => project_count + 4,
+            Screen::TimerManager => project_count + 1,
+            Screen::Dashboard => empty_dashboard_height,
+        };
         let layout = Layout::vertical(vec![
-            Constraint::Min(3),
-            Constraint::Length(4),
-            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(dashboard_height),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
         ]);
-        let [main_area, timer_area, hint_area] = frame.area().layout(&layout);
+        let [
+            title_area,
+            title_spacer_area,
+            main_area,
+            main_spacer_area,
+            timer_area,
+            timer_spacer_area,
+            hint_area,
+        ] = frame.area().layout(&layout);
+        let title = Line::from_iter([
+            "A".light_red().bold(),
+            "e".red().bold(),
+            "t".light_magenta().bold(),
+            "e".magenta().bold(),
+            "r".light_yellow().bold(),
+            "n".yellow().bold(),
+            "i".light_green().bold(),
+            "t".green().bold(),
+            "a".light_blue().bold(),
+            "s".blue().bold(),
+            "! | ".to_span(),
+            Span::from(env!("CARGO_PKG_VERSION")),
+            " ".to_span(),
+        ])
+        .centered();
+        let spacer = Block::new();
+
+        frame.render_widget(title, title_area);
+        frame.render_widget(spacer.clone(), title_spacer_area);
+        frame.render_widget(spacer.clone(), main_spacer_area);
+        frame.render_widget(spacer, timer_spacer_area);
+
+        self.draw_timer(frame, timer_area);
+        self.draw_hint(frame, hint_area);
 
         match self.screen {
             Screen::Dashboard => {
                 self.draw_dashboard(frame, main_area);
-                self.draw_timer(frame, timer_area);
-                self.draw_hint(frame, hint_area);
             }
             Screen::TimerManager => {
                 self.draw_timer_manager(frame, main_area);
-                self.draw_timer(frame, timer_area);
-                self.draw_hint(frame, hint_area);
             }
             Screen::NewProject => {
                 self.draw_new_project(frame, main_area);
-                self.draw_timer(frame, timer_area);
-                self.draw_hint(frame, hint_area);
             }
         };
     }
@@ -144,41 +187,25 @@ impl App {
     }
 
     fn draw_dashboard(&mut self, frame: &mut Frame, area: Rect) {
-        let dashboard = Block::new()
-            .title_top(
-                Line::from_iter([
-                    " Welcome to ".to_span(),
-                    "A".light_red().bold(),
-                    "e".red().bold(),
-                    "t".light_magenta().bold(),
-                    "e".magenta().bold(),
-                    "r".light_yellow().bold(),
-                    "n".yellow().bold(),
-                    "i".light_green().bold(),
-                    "t".green().bold(),
-                    "a".light_blue().bold(),
-                    "s".blue().bold(),
-                    "! / ".to_span(),
-                    Span::from(env!("CARGO_PKG_VERSION")),
-                    " ".to_span(),
-                ])
-                .left_aligned(),
-            )
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::new().yellow())
-            .padding(Padding::horizontal(1));
+        let is_empty = self.db.projects_list().len() == 0;
 
-        let inner_dashboard_area = dashboard.inner(area);
-        frame.render_widget(dashboard, area);
+        if is_empty {
+            let empty_block = Block::new()
+                .padding(Padding::new(0, 0, 0, 1))
+                .title("No projects")
+                .title_alignment(HorizontalAlignment::Center);
+
+            frame.render_widget(empty_block, area);
+            ()
+        }
 
         let summary = self.db.summary_by_project();
         let constraints = summary.iter().map(|_| Constraint::Length(1));
         let timers_layout = Layout::new(Direction::Vertical, constraints);
         let timers_count = summary.len();
-        let timers_areas: Vec<Rect> = inner_dashboard_area.layout_vec(&timers_layout);
+        let timers_areas: Vec<Rect> = area.layout_vec(&timers_layout);
         let mut i = 0;
-        let mut max = 0;
+        let mut max = 1;
 
         while i < timers_count {
             let summary_item = summary.get(i);
@@ -206,7 +233,7 @@ impl App {
                     let percent = 100. / (max as f64 / safe_count as f64);
                     let gauge = Gauge::default()
                         .style(Modifier::BOLD)
-                        .gauge_style(Style::new().yellow().on_black())
+                        .gauge_style(Style::new().fg(Color::Indexed(GAUGE_COLOR)))
                         .label(title)
                         .percent(percent as u16);
 
@@ -220,13 +247,6 @@ impl App {
     }
 
     fn draw_new_project(&mut self, frame: &mut Frame, area: Rect) {
-        let wrapper = Block::new()
-            .title_top(Line::from_iter([" New project ".to_span()]).left_aligned())
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::new().yellow())
-            .padding(Padding::horizontal(1));
-
         let layout = Layout::new(
             Direction::Vertical,
             [
@@ -243,7 +263,7 @@ impl App {
             _empty_line,
             projects_list_title_area,
             projects_list_area,
-        ] = wrapper.inner(area).layout(&layout);
+        ] = area.layout(&layout);
 
         let input_title = Paragraph::new("Project name:").dark_gray().bold();
         let input = Paragraph::new(String::from(&self.input.input))
@@ -260,7 +280,6 @@ impl App {
             input_area.y,
         ));
 
-        frame.render_widget(wrapper, area);
         frame.render_widget(input_title, input_title_area);
         frame.render_widget(input, input_area);
         frame.render_widget(projects_list_title, projects_list_title_area);
@@ -271,122 +290,80 @@ impl App {
         let db_items = self.db.projects_list();
         let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
 
-        let wrapper = Block::new()
-            .title_top(Line::from_iter([" New timer ".to_span()]).left_aligned())
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::new().yellow())
-            .padding(Padding::horizontal(1));
         let layout = Layout::new(
             Direction::Vertical,
             [Constraint::Length(1), Constraint::Min(1)],
         );
-        let [title_area, list_area] = layout.areas(wrapper.inner(area));
+        let [title_area, list_area] = layout.areas(area);
 
-        let title = Paragraph::new("Select project:").bold().dark_gray();
+        let title = Paragraph::new("Select project:").fg(Color::Indexed(SHADOWED_COLOR));
         let list = List::new(names)
-            .style(Color::White)
-            .highlight_style(Modifier::REVERSED)
+            .highlight_style(Style::new().bg(Color::Indexed(ACCENT_COLOR)))
             .highlight_symbol("> ");
 
-        frame.render_widget(wrapper, area);
         frame.render_widget(title, title_area);
         frame.render_stateful_widget(list, list_area, &mut self.project_list);
     }
 
     fn draw_timer(&mut self, frame: &mut Frame, area: Rect) {
         let is_running = self.db.check_is_running_timer();
-        let timer = if is_running {
-            Paragraph::new(self.timer.clone()).bold()
+        let timer = &self.timer;
+        let project = &self.project;
+        let text = if is_running {
+            Line::from_iter([project.to_span(), " | ".to_span(), timer.to_span().bold()])
         } else {
-            Paragraph::new("-").dark_gray()
-        };
-        let project = if is_running {
-            Paragraph::new(self.project.clone()).bold()
-        } else {
-            Paragraph::new("-").dark_gray()
+            Line::from_iter(["No running timer"])
         };
 
-        let wrapper = Block::new()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .padding(Padding::horizontal(1));
-        let wrapper = if is_running {
-            wrapper.border_style(Color::Green)
+        let paragraph = Paragraph::new(text);
+        let paragraph = if is_running {
+            paragraph.bg(Color::Indexed(RUNNING_TIMER_COLOR))
         } else {
-            wrapper.border_style(Color::Red)
+            paragraph.bg(Color::Indexed(ACCENT_COLOR))
         };
 
-        let columns_layout = Layout::new(
-            Direction::Horizontal,
-            [Constraint::Percentage(50), Constraint::Percentage(50)],
-        );
-        let rows_layout = Layout::new(
-            Direction::Vertical,
-            [Constraint::Length(1), Constraint::Length(1)],
-        );
-        let [timer_area, project_area] = columns_layout.areas(wrapper.inner(area));
-        let [timer_title_area, timer_area] = rows_layout.areas(timer_area);
-        let [project_title_area, project_area] = rows_layout.areas(project_area);
-
-        frame.render_widget(wrapper, area);
-        frame.render_widget(Paragraph::new("Timer:").dark_gray(), timer_title_area);
-        frame.render_widget(timer, timer_area);
-        frame.render_widget(Paragraph::new("Project:").dark_gray(), project_title_area);
-        frame.render_widget(project, project_area);
+        frame.render_widget(paragraph, area);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
-        let wrapper = Block::new()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::new().light_yellow())
-            .padding(Padding::horizontal(1));
+        let color = Color::Indexed(ACCENT_COLOR);
+        let secondary_color = Color::Indexed(SHADOWED_COLOR);
 
-        match self.screen {
+        let hint = match self.screen {
             Screen::Dashboard => {
                 let timer_hint = if self.db.check_is_running_timer() {
                     "top timer | "
                 } else {
                     "tart timer | "
                 };
-                let hint = Paragraph::new(Line::from_iter([
-                    "S".to_span().bold().black().bg(Color::LightYellow),
-                    timer_hint.to_span(),
-                    " New ".to_span(),
-                    "P".to_span().bold().black().bg(Color::LightYellow),
-                    "roject | ".to_span(),
-                    " ".to_span(),
-                    "R".to_span().bold().black().bg(Color::LightYellow),
-                    "eset DB | ".to_span(),
-                    " ".to_span(),
-                    "Q".bold().black().bg(Color::LightYellow),
-                    "uit ".to_span(),
-                ]));
 
-                frame.render_widget(hint.block(wrapper), area);
+                Paragraph::new(Line::from_iter([
+                    "S".to_span().bold().black().bg(color),
+                    Span::from(timer_hint).fg(secondary_color),
+                    "New ".to_span().fg(secondary_color),
+                    "P".to_span().bold().black().bg(color),
+                    "roject | ".to_span().fg(secondary_color),
+                    "R".to_span().bold().black().bg(color),
+                    "eset DB | ".to_span().fg(secondary_color),
+                    "Q".bold().black().bg(color),
+                    "uit ".to_span().fg(secondary_color),
+                ]))
             }
-            Screen::NewProject => {
-                let hint = Paragraph::new(Line::from_iter([
-                    "<Enter>".bold().black().bg(Color::LightYellow),
-                    " Submit | ".to_span(),
-                    "<ESC>".bold().black().bg(Color::LightYellow),
-                    " Cancel ".to_span(),
-                ]));
+            Screen::NewProject => Paragraph::new(Line::from_iter([
+                "<Enter>".bold().black().bg(color),
+                " Submit | ".to_span().fg(secondary_color),
+                "<ESC>".bold().black().bg(color),
+                " Cancel ".to_span().fg(secondary_color),
+            ])),
+            Screen::TimerManager => Paragraph::new(Line::from_iter([
+                "<Up/Down/Enter>".bold().black().bg(color),
+                " Select project | ".to_span().fg(secondary_color),
+                "<ESC>".bold().black().bg(color),
+                " Cancel ".to_span().fg(secondary_color),
+            ])),
+        };
 
-                frame.render_widget(hint.block(wrapper), area);
-            }
-            Screen::TimerManager => {
-                let hint = Paragraph::new(Line::from_iter([
-                    "<Up/Down/Enter>".bold().black().bg(Color::LightYellow),
-                    " Select project | ".to_span(),
-                    "<ESC>".bold().black().bg(Color::LightYellow),
-                    " Cancel ".to_span(),
-                ]));
-
-                frame.render_widget(hint.block(wrapper), area);
-            }
-        }
+        frame.render_widget(hint.centered(), area);
     }
 
     fn exit(&mut self) {
