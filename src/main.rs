@@ -1,12 +1,14 @@
 use std::{
-    io,
+    fs, io,
     time::{Duration, Instant},
 };
 
 use crate::modules::{
+    backuper::Backuper,
     db::{Db, DbProject},
     input::Input,
     time_formatting::TimeFormating,
+    utils::Utils,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -35,7 +37,7 @@ pub struct App {
     db: Db,
     project_list: ListState,
     backup_list: ListState,
-    backup_list_count: u16,
+    backuper: Backuper,
     timer: String,
     project: String,
 }
@@ -56,13 +58,16 @@ impl App {
             db: Db::new(),
             project_list: ListState::default().with_selected(Some(0)),
             backup_list: ListState::default().with_selected(Some(0)),
-            backup_list_count: 0,
+            backuper: Backuper::new(),
             timer: String::from("-"),
             project: String::from("-"),
         }
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let app_dir = Utils::get_app_dir();
+        fs::create_dir_all(&app_dir).expect("Could not create working directory");
+
         let mut last_tick = Instant::now();
         self.on_tick();
 
@@ -90,19 +95,26 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let project_count = self.db.projects_list().len() as u16;
         let empty_dashboard_height = if project_count > 0 { project_count } else { 3 };
-        let dashboard_height = match self.screen {
+        let main_area_height = match self.screen {
             Screen::NewProject => project_count + 4,
             Screen::TimerManager => project_count + 1,
             Screen::Dashboard => empty_dashboard_height,
-            Screen::Restore => self.backup_list_count + 1,
+            Screen::Restore => self.backuper.count as u16,
         };
         let layout = Layout::vertical(vec![
+            // title
             Constraint::Length(1),
+            // empty line
             Constraint::Length(1),
-            Constraint::Length(dashboard_height),
+            // main area
+            Constraint::Length(main_area_height),
+            // empty line
             Constraint::Length(1),
+            // timer
             Constraint::Length(1),
+            // empty line
             Constraint::Length(1),
+            // hint
             Constraint::Length(1),
         ]);
         let [
@@ -391,7 +403,21 @@ impl App {
         frame.render_widget(hint.centered(), area);
     }
 
-    fn draw_restore(&mut self, frame: &mut Frame, area: Rect) {}
+    fn draw_restore(&mut self, frame: &mut Frame, area: Rect) {
+        let layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Length(1), Constraint::Min(1)],
+        );
+        let [backup_list_title_area, backup_list_area] = area.layout(&layout);
+
+        let title = Paragraph::new("Select backup:").fg(SHADOWED_COLOR).bold();
+        let list = List::new(self.backuper.list.clone())
+            .highlight_style(Style::new().bg(ACCENT_COLOR))
+            .highlight_symbol("> ");
+
+        frame.render_widget(title, backup_list_title_area);
+        frame.render_stateful_widget(list, backup_list_area, &mut self.backup_list);
+    }
 
     fn exit(&mut self) {
         self.should_exit = true;
@@ -405,6 +431,11 @@ impl App {
             }
             Screen::NewProject => {
                 self.input = Input::new();
+                self.screen = screen;
+            }
+            Screen::Restore => {
+                self.backuper.recalculate_list();
+                self.backup_list.select(Some(0));
                 self.screen = screen;
             }
             _ => self.screen = screen,

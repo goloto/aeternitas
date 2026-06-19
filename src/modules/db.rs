@@ -1,8 +1,8 @@
-use std::{fs, path::PathBuf, time::SystemTime};
+use std::path::PathBuf;
 
 use rusqlite::{Connection, Error};
 
-use crate::time_formating::TimeFormating;
+use crate::modules::{time_formatting::TimeFormating, utils::Utils};
 
 pub struct Db {
     connection: Connection,
@@ -32,14 +32,11 @@ impl Db {
     }
 
     fn db_path() -> PathBuf {
-        let mut data_path =
-            dirs::data_local_dir().expect("Could not retrieve local data directory");
-        data_path.push("aeternitas");
-        fs::create_dir_all(&data_path).expect("Could not create directory for db");
-        data_path.push("aeternitas");
-        data_path.set_extension("db");
+        let mut app_dir = Utils::get_app_dir();
+        app_dir.push("aeternitas");
+        app_dir.set_extension("db");
 
-        data_path
+        app_dir
     }
 
     fn migrate_v1(&self) {
@@ -265,8 +262,10 @@ impl Db {
 
     pub fn backup(&self) {
         let now = TimeFormating::current_time();
-        let db_path = Db::db_path();
-        let db_path = db_path.to_str().expect("Could not retrive path to db");
+        let db_path = Utils::get_app_dir();
+        let db_path = db_path
+            .to_str()
+            .expect("Could not retrive path to app directory");
         let backup_file_name =
             String::from(format!("{db_path}/aeternitas_backup_{now}").to_string());
 
