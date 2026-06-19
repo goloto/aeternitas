@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, time::SystemTime};
 
 use rusqlite::{Connection, Error};
 
@@ -261,5 +261,21 @@ impl Db {
         }
 
         result
+    }
+
+    pub fn backup(&self) {
+        let now = TimeFormating::current_time();
+        let db_path = Db::db_path();
+        let db_path = db_path.to_str().expect("Could not retrive path to db");
+        let backup_file_name =
+            String::from(format!("{db_path}/aeternitas_backup_{now}").to_string());
+
+        self.connection
+            .execute("VACUUM INTO ?1;", [backup_file_name])
+            .expect("Could not create db backup");
+    }
+
+    pub fn restore(&self) {
+        todo!();
     }
 }

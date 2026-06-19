@@ -3,8 +3,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::modules::{
+    db::{Db, DbProject},
+    input::Input,
+    time_formatting::TimeFormating,
+};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use input::Input;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Direction, HorizontalAlignment, Layout, Position, Rect},
@@ -13,19 +17,12 @@ use ratatui::{
     widgets::{Block, Gauge, List, ListState, Padding, Paragraph},
 };
 
-use crate::{
-    db::{Db, DbProject},
-    time_formating::TimeFormating,
-};
+mod modules;
 
-mod db;
-mod input;
-mod time_formating;
-
-const ACCENT_COLOR: u8 = 204;
-const SHADOWED_COLOR: u8 = 244;
-const GAUGE_COLOR: u8 = 066;
-const RUNNING_TIMER_COLOR: u8 = 114;
+const ACCENT_COLOR: Color = Color::Rgb(239, 100, 97);
+const RUNNING_TIMER_COLOR: Color = Color::Rgb(189, 247, 183);
+const SHADOWED_COLOR: Color = Color::Gray;
+const GAUGE_COLOR: Color = Color::DarkGray;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
@@ -37,6 +34,8 @@ pub struct App {
     input: Input,
     db: Db,
     project_list: ListState,
+    backup_list: ListState,
+    backup_list_count: u16,
     timer: String,
     project: String,
 }
@@ -45,6 +44,7 @@ enum Screen {
     Dashboard,
     TimerManager,
     NewProject,
+    Restore,
 }
 
 impl App {
@@ -55,6 +55,8 @@ impl App {
             input: Input::new(),
             db: Db::new(),
             project_list: ListState::default().with_selected(Some(0)),
+            backup_list: ListState::default().with_selected(Some(0)),
+            backup_list_count: 0,
             timer: String::from("-"),
             project: String::from("-"),
         }
@@ -92,6 +94,7 @@ impl App {
             Screen::NewProject => project_count + 4,
             Screen::TimerManager => project_count + 1,
             Screen::Dashboard => empty_dashboard_height,
+            Screen::Restore => self.backup_list_count + 1,
         };
         let layout = Layout::vertical(vec![
             Constraint::Length(1),
@@ -147,6 +150,9 @@ impl App {
             Screen::NewProject => {
                 self.draw_new_project(frame, main_area);
             }
+            Screen::Restore => {
+                self.draw_restore(frame, main_area);
+            }
         };
     }
 
@@ -164,8 +170,9 @@ impl App {
                 Screen::Dashboard => match key_event.code {
                     KeyCode::Char('s') => self.manage_timer(),
                     KeyCode::Char('p') => self.to_screen(Screen::NewProject),
-                    KeyCode::Char('r') => self.db.reset(),
+                    KeyCode::Char('r') => self.to_screen(Screen::Restore),
                     KeyCode::Char('q') => self.exit(),
+                    KeyCode::Char('b') => self.db.backup(),
                     _ => {}
                 },
                 Screen::TimerManager => match key_event.code {
@@ -180,6 +187,13 @@ impl App {
                     KeyCode::Enter => self.submit_new_project(),
                     _ => self.input.handle_key_event(key_event),
                 },
+                Screen::Restore => match key_event.code {
+                    KeyCode::Esc => self.from_screen(Screen::Restore),
+                    KeyCode::Down => self.backup_list.select_next(),
+                    KeyCode::Up => self.backup_list.select_previous(),
+                    KeyCode::Enter => self.restore(),
+                    _ => {}
+                },
             },
             _ => {}
         };
@@ -192,7 +206,8 @@ impl App {
         if is_empty {
             let empty_block = Block::new()
                 .padding(Padding::new(0, 0, 0, 1))
-                .title("No projects")
+                .title("No projects yet")
+                .fg(SHADOWED_COLOR)
                 .title_alignment(HorizontalAlignment::Center);
 
             frame.render_widget(empty_block, area);
@@ -233,7 +248,7 @@ impl App {
                     let percent = 100. / (max as f64 / safe_count as f64);
                     let gauge = Gauge::default()
                         .style(Modifier::BOLD)
-                        .gauge_style(Style::new().fg(Color::Indexed(GAUGE_COLOR)))
+                        .gauge_style(Style::new().fg(GAUGE_COLOR))
                         .label(title)
                         .percent(percent as u16);
 
@@ -265,14 +280,16 @@ impl App {
             projects_list_area,
         ] = area.layout(&layout);
 
-        let input_title = Paragraph::new("Project name:").dark_gray().bold();
+        let input_title = Paragraph::new("Project name:").fg(SHADOWED_COLOR).bold();
         let input = Paragraph::new(String::from(&self.input.input))
-            .bg(Color::DarkGray)
+            .bg(ACCENT_COLOR)
             .white();
 
         let db_items = self.db.projects_list();
         let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
-        let projects_list_title = Paragraph::new("Existed projects:").dark_gray().bold();
+        let projects_list_title = Paragraph::new("Existed projects:")
+            .fg(SHADOWED_COLOR)
+            .bold();
         let projects_list = List::new(names).white();
 
         frame.set_cursor_position(Position::new(
@@ -296,9 +313,9 @@ impl App {
         );
         let [title_area, list_area] = layout.areas(area);
 
-        let title = Paragraph::new("Select project:").fg(Color::Indexed(SHADOWED_COLOR));
+        let title = Paragraph::new("Select project:").fg(SHADOWED_COLOR).bold();
         let list = List::new(names)
-            .highlight_style(Style::new().bg(Color::Indexed(ACCENT_COLOR)))
+            .highlight_style(Style::new().bg(ACCENT_COLOR))
             .highlight_symbol("> ");
 
         frame.render_widget(title, title_area);
@@ -315,19 +332,19 @@ impl App {
             Line::from_iter(["No running timer"])
         };
 
-        let paragraph = Paragraph::new(text);
+        let paragraph = Paragraph::new(text).centered();
         let paragraph = if is_running {
-            paragraph.bg(Color::Indexed(RUNNING_TIMER_COLOR))
+            paragraph.bg(RUNNING_TIMER_COLOR).fg(Color::Black)
         } else {
-            paragraph.bg(Color::Indexed(ACCENT_COLOR))
+            paragraph.bg(ACCENT_COLOR)
         };
 
         frame.render_widget(paragraph, area);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
-        let color = Color::Indexed(ACCENT_COLOR);
-        let secondary_color = Color::Indexed(SHADOWED_COLOR);
+        let color = ACCENT_COLOR;
+        let secondary_color = SHADOWED_COLOR;
 
         let hint = match self.screen {
             Screen::Dashboard => {
@@ -343,8 +360,10 @@ impl App {
                     "New ".to_span().fg(secondary_color),
                     "P".to_span().bold().black().bg(color),
                     "roject | ".to_span().fg(secondary_color),
+                    "B".to_span().bold().black().bg(color),
+                    "ackup DB | ".to_span().fg(secondary_color),
                     "R".to_span().bold().black().bg(color),
-                    "eset DB | ".to_span().fg(secondary_color),
+                    "estore DB | ".to_span().fg(secondary_color),
                     "Q".bold().black().bg(color),
                     "uit ".to_span().fg(secondary_color),
                 ]))
@@ -361,10 +380,18 @@ impl App {
                 "<ESC>".bold().black().bg(color),
                 " Cancel ".to_span().fg(secondary_color),
             ])),
+            Screen::Restore => Paragraph::new(Line::from_iter([
+                "<Up/Down/Enter>".bold().black().bg(color),
+                " Select backup | ".to_span().fg(secondary_color),
+                "<ESC>".bold().black().bg(color),
+                " Cancel ".to_span().fg(secondary_color),
+            ])),
         };
 
         frame.render_widget(hint.centered(), area);
     }
+
+    fn draw_restore(&mut self, frame: &mut Frame, area: Rect) {}
 
     fn exit(&mut self) {
         self.should_exit = true;
@@ -388,6 +415,7 @@ impl App {
         match screen {
             Screen::NewProject => self.screen = Screen::Dashboard,
             Screen::TimerManager => self.screen = Screen::Dashboard,
+            Screen::Restore => self.screen = Screen::Dashboard,
             _ => {}
         }
     }
@@ -426,5 +454,9 @@ impl App {
         self.timer = String::from("0s");
         self.project = self.current_timer_project().name;
         self.screen = Screen::Dashboard;
+    }
+
+    fn restore(&mut self) {
+        self.db.restore();
     }
 }
