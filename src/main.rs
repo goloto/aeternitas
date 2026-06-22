@@ -23,7 +23,7 @@ mod modules;
 
 const ACCENT_COLOR: Color = Color::Rgb(239, 100, 97);
 const RUNNING_TIMER_COLOR: Color = Color::Rgb(189, 247, 183);
-const SHADOWED_COLOR: Color = Color::Gray;
+const SHADOWED_COLOR: Color = Color::DarkGray;
 const GAUGE_COLOR: Color = Color::DarkGray;
 
 fn main() -> io::Result<()> {
@@ -99,7 +99,7 @@ impl App {
             Screen::NewProject => project_count + 4,
             Screen::TimerManager => project_count + 1,
             Screen::Dashboard => empty_dashboard_height,
-            Screen::Restore => self.backuper.count as u16,
+            Screen::Restore => self.backuper.count as u16 + 1,
         };
         let layout = Layout::vertical(vec![
             // title
