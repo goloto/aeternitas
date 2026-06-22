@@ -355,8 +355,12 @@ impl App {
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
-        let color = ACCENT_COLOR;
-        let secondary_color = SHADOWED_COLOR;
+        fn get_initial<'a>(str: &'a str) -> Span<'a> {
+            Span::raw(str).bold().fg(ACCENT_COLOR)
+        }
+        fn get_common<'a>(str: &'a str) -> Span<'a> {
+            Span::raw(str).fg(SHADOWED_COLOR)
+        }
 
         let hint = match self.screen {
             Screen::Dashboard => {
@@ -367,36 +371,36 @@ impl App {
                 };
 
                 Paragraph::new(Line::from_iter([
-                    "S".to_span().bold().black().bg(color),
-                    Span::from(timer_hint).fg(secondary_color),
-                    "New ".to_span().fg(secondary_color),
-                    "P".to_span().bold().black().bg(color),
-                    "roject | ".to_span().fg(secondary_color),
-                    "B".to_span().bold().black().bg(color),
-                    "ackup DB | ".to_span().fg(secondary_color),
-                    "R".to_span().bold().black().bg(color),
-                    "estore DB | ".to_span().fg(secondary_color),
-                    "Q".bold().black().bg(color),
-                    "uit ".to_span().fg(secondary_color),
+                    get_initial("S"),
+                    get_common(timer_hint),
+                    get_common("New "),
+                    get_initial("P"),
+                    get_common("roject | "),
+                    get_initial("B"),
+                    get_common("ackup DB | "),
+                    get_initial("R"),
+                    get_common("estore DB | "),
+                    get_initial("Q"),
+                    get_common("uit "),
                 ]))
             }
             Screen::NewProject => Paragraph::new(Line::from_iter([
-                "<Enter>".bold().black().bg(color),
-                " Submit | ".to_span().fg(secondary_color),
-                "<ESC>".bold().black().bg(color),
-                " Cancel ".to_span().fg(secondary_color),
+                get_initial("<Enter>"),
+                get_common(" Submit | "),
+                get_initial("<ESC>"),
+                get_common(" Cancel "),
             ])),
             Screen::TimerManager => Paragraph::new(Line::from_iter([
-                "<Up/Down/Enter>".bold().black().bg(color),
-                " Select project | ".to_span().fg(secondary_color),
-                "<ESC>".bold().black().bg(color),
-                " Cancel ".to_span().fg(secondary_color),
+                get_initial("<Up/Down/Enter>"),
+                get_common(" Select project | "),
+                get_initial("<ESC>"),
+                get_common(" Cancel "),
             ])),
             Screen::Restore => Paragraph::new(Line::from_iter([
-                "<Up/Down/Enter>".bold().black().bg(color),
-                " Select backup | ".to_span().fg(secondary_color),
-                "<ESC>".bold().black().bg(color),
-                " Cancel ".to_span().fg(secondary_color),
+                get_initial("<Up/Down/Enter>"),
+                get_common(" Select backup | "),
+                get_initial("<ESC>"),
+                get_common(" Cancel "),
             ])),
         };
 
