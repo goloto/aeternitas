@@ -15,7 +15,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Direction, Flex, HorizontalAlignment, Layout, Position, Rect},
-    style::{Color, Style, Styled, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span, ToSpan},
     widgets::{Block, List, ListState, Padding, Paragraph},
 };
@@ -94,8 +94,10 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let project_count = self.db.projects_list().len() as u16;
         let empty_dashboard_height = if project_count > 0 {
-            project_count + 1
+            // + title + empty line
+            project_count + 2
         } else {
+            // empty line + title + empty line
             3
         };
         let main_area_height = match self.screen {
