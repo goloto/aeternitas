@@ -239,20 +239,6 @@ impl Db {
         }
     }
 
-    pub fn reset(&self) {
-        self.connection
-            .execute("DROP TABLE IF EXISTS projects", [])
-            .expect("Could not drop projects table");
-        self.connection
-            .execute("DROP TABLE IF EXISTS timers", [])
-            .expect("Could not drop timers table");
-        self.connection
-            .execute("DROP TABLE IF EXISTS summary", [])
-            .expect("Could not drop summary table");
-
-        self.migrate_v1();
-    }
-
     pub fn summary_by_project(&self) -> Vec<(String, i64)> {
         let mut statement = self
             .connection
