@@ -14,18 +14,18 @@ use crate::modules::{
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Direction, HorizontalAlignment, Layout, Position, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    layout::{Constraint, Direction, Flex, HorizontalAlignment, Layout, Position, Rect},
+    style::{Color, Style, Styled, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, Gauge, List, ListState, Padding, Paragraph},
+    widgets::{Block, List, ListState, Padding, Paragraph},
 };
 
 mod modules;
 
 const ACCENT_COLOR: Color = Color::Rgb(239, 100, 97);
 const RUNNING_TIMER_COLOR: Color = Color::Rgb(189, 247, 183);
-const SHADOWED_COLOR: Color = Color::DarkGray;
-const GAUGE_COLOR: Color = Color::DarkGray;
+const REGULAR_TEXT_COLOR: Color = Color::DarkGray;
+const BOLD_TEXT_COLOR: Color = Color::Rgb(6, 41, 45);
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
@@ -93,7 +93,11 @@ impl App {
 
     fn draw(&mut self, frame: &mut Frame) {
         let project_count = self.db.projects_list().len() as u16;
-        let empty_dashboard_height = if project_count > 0 { project_count } else { 3 };
+        let empty_dashboard_height = if project_count > 0 {
+            project_count + 1
+        } else {
+            3
+        };
         let main_area_height = match self.screen {
             Screen::NewProject => project_count + 4,
             Screen::NewTimer => project_count + 1,
@@ -118,11 +122,11 @@ impl App {
         ]);
         let [
             title_area,
-            title_spacer_area,
+            _title_spacer_area,
             main_area,
-            main_spacer_area,
+            _main_spacer_area,
             timer_area,
-            timer_spacer_area,
+            _timer_spacer_area,
             hint_area,
         ] = frame.area().layout(&layout);
         let title = Line::from_iter([
@@ -141,12 +145,7 @@ impl App {
             " ".to_span(),
         ])
         .centered();
-        let spacer = Block::new();
-
         frame.render_widget(title, title_area);
-        frame.render_widget(spacer.clone(), title_spacer_area);
-        frame.render_widget(spacer.clone(), main_spacer_area);
-        frame.render_widget(spacer, timer_spacer_area);
 
         self.draw_timer(frame, timer_area);
         self.draw_hint(frame, hint_area);
@@ -219,18 +218,39 @@ impl App {
             let empty_block = Block::new()
                 .padding(Padding::new(0, 0, 0, 1))
                 .title("No projects yet")
-                .fg(SHADOWED_COLOR)
+                .fg(REGULAR_TEXT_COLOR)
                 .title_alignment(HorizontalAlignment::Center);
 
             frame.render_widget(empty_block, area);
             ()
         }
 
+        let horizontal_layout = Layout::new(
+            Direction::Horizontal,
+            [
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+            ],
+        );
+        let vertical_layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Length(2), Constraint::Min(1)],
+        );
+        let [overall_area, last_week_area, current_week_area] = horizontal_layout.areas(area);
+        let [overall_title_area, overall_area] = vertical_layout.areas(overall_area);
+        let [last_week_title_area, last_week_area] = vertical_layout.areas(last_week_area);
+        let [current_week_title_area, current_week_area] = vertical_layout.areas(current_week_area);
+
+        frame.render_widget(Paragraph::new("Overall:"), overall_title_area);
+        frame.render_widget(Paragraph::new("Last week:"), last_week_title_area);
+        frame.render_widget(Paragraph::new("Current week:"), current_week_title_area);
+
         let summary = self.db.summary_by_project();
-        let constraints = summary.iter().map(|_| Constraint::Length(1));
+        let constraints: Vec<Constraint> = summary.iter().map(|_| Constraint::Length(1)).collect();
         let timers_layout = Layout::new(Direction::Vertical, constraints);
         let timers_count = summary.len();
-        let timers_areas: Vec<Rect> = area.layout_vec(&timers_layout);
+        let timers_areas: Vec<Rect> = overall_area.layout_vec(&timers_layout);
         let mut i = 0;
         let mut max = 1;
 
@@ -255,16 +275,25 @@ impl App {
                 Some(item) => {
                     let formatted_time = TimeFormating::from_seconds(item.1 as u64);
                     let title = item.0.clone();
-                    let title = format!("{title}, {formatted_time}");
-                    let safe_count = if item.1 == 0 { 1 } else { item.1 };
-                    let percent = 100. / (max as f64 / safe_count as f64);
-                    let gauge = Gauge::default()
-                        .style(Modifier::BOLD)
-                        .gauge_style(Style::new().fg(GAUGE_COLOR))
-                        .label(title)
-                        .percent(percent as u16);
 
-                    frame.render_widget(gauge, timers_areas[i]);
+                    let timer_layout = Layout::new(
+                        Direction::Horizontal,
+                        [Constraint::Min(1), Constraint::Min(1)],
+                    )
+                    .flex(Flex::SpaceBetween);
+                    let [project_name_area, timer_area] = timer_layout.areas(timers_areas[i]);
+
+                    frame.render_widget(
+                        Paragraph::new(title).fg(REGULAR_TEXT_COLOR),
+                        project_name_area,
+                    );
+                    frame.render_widget(
+                        Paragraph::new(formatted_time)
+                            .bold()
+                            .fg(BOLD_TEXT_COLOR)
+                            .right_aligned(),
+                        timer_area,
+                    );
                 }
                 None => continue,
             }
@@ -292,13 +321,13 @@ impl App {
             projects_list_area,
         ] = area.layout(&layout);
 
-        let input_title = Paragraph::new("Project name:").fg(SHADOWED_COLOR).bold();
+        let input_title = Paragraph::new("Project name:").fg(BOLD_TEXT_COLOR).bold();
         let input = Paragraph::new(String::from(&self.input.input))
             .bg(ACCENT_COLOR)
             .white();
 
         let projects_list_title = Paragraph::new("Existed projects:")
-            .fg(SHADOWED_COLOR)
+            .fg(BOLD_TEXT_COLOR)
             .bold();
         let projects_list = List::new(self.db.project_names()).white();
 
@@ -320,7 +349,7 @@ impl App {
         );
         let [title_area, list_area] = layout.areas(area);
 
-        let title = Paragraph::new("Select project:").fg(SHADOWED_COLOR).bold();
+        let title = Paragraph::new("Select project:").fg(BOLD_TEXT_COLOR).bold();
         let project_names: Vec<String> = self
             .project_list
             .rich_state
@@ -346,20 +375,20 @@ impl App {
                 Line::from_iter([
                     timer.project_name.to_span(),
                     " | ".to_span(),
-                    diff_formatted.to_span().bold(),
+                    diff_formatted.to_span().bold().fg(BOLD_TEXT_COLOR),
                 ])
             }
             None => Line::from_iter(["No running timer"]),
         };
 
-        let paragraph = Paragraph::new(text).centered();
-        let paragraph = if is_running {
-            paragraph.bg(RUNNING_TIMER_COLOR).fg(Color::Black)
+        let timer = Paragraph::new(text).centered();
+        let timer = if is_running {
+            timer.bg(RUNNING_TIMER_COLOR).fg(Color::Black)
         } else {
-            paragraph.bg(ACCENT_COLOR)
+            timer.bg(ACCENT_COLOR)
         };
 
-        frame.render_widget(paragraph, area);
+        frame.render_widget(timer, area);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
@@ -367,7 +396,7 @@ impl App {
             Span::raw(str).bold().fg(ACCENT_COLOR)
         }
         fn get_common<'a>(str: &'a str) -> Span<'a> {
-            Span::raw(str).fg(SHADOWED_COLOR)
+            Span::raw(str).fg(REGULAR_TEXT_COLOR)
         }
 
         let hint = match self.screen {
@@ -422,7 +451,7 @@ impl App {
         );
         let [backup_list_title_area, backup_list_area] = area.layout(&layout);
 
-        let title = Paragraph::new("Select backup:").fg(SHADOWED_COLOR).bold();
+        let title = Paragraph::new("Select backup:").fg(BOLD_TEXT_COLOR).bold();
         let list = List::new(self.backuper.list.clone())
             .highlight_style(Style::new().bg(ACCENT_COLOR))
             .highlight_symbol("> ");
