@@ -5,8 +5,9 @@ use std::{
 
 use crate::modules::{
     backuper::Backuper,
-    db::{Db, DbProject},
+    db::{Db, DbProject, DbTimer},
     input::Input,
+    rich_list_state::RichListState,
     time_formatting::TimeFormating,
     utils::Utils,
 };
@@ -35,16 +36,15 @@ pub struct App {
     screen: Screen,
     input: Input,
     db: Db,
-    project_list: ListState,
+    project_list: RichListState<DbProject>,
     backup_list: ListState,
     backuper: Backuper,
-    timer: String,
-    project: String,
+    timer: Option<DbTimer>,
 }
 
 enum Screen {
     Dashboard,
-    TimerManager,
+    NewTimer,
     NewProject,
     Restore,
 }
@@ -56,11 +56,10 @@ impl App {
             screen: Screen::Dashboard,
             input: Input::new(),
             db: Db::new(),
-            project_list: ListState::default().with_selected(Some(0)),
+            project_list: RichListState::default(),
             backup_list: ListState::default().with_selected(Some(0)),
             backuper: Backuper::new(),
-            timer: String::from("-"),
-            project: String::from("-"),
+            timer: None,
         }
     }
 
@@ -97,7 +96,7 @@ impl App {
         let empty_dashboard_height = if project_count > 0 { project_count } else { 3 };
         let main_area_height = match self.screen {
             Screen::NewProject => project_count + 4,
-            Screen::TimerManager => project_count + 1,
+            Screen::NewTimer => project_count + 1,
             Screen::Dashboard => empty_dashboard_height,
             Screen::Restore => self.backuper.count as u16 + 1,
         };
@@ -156,8 +155,8 @@ impl App {
             Screen::Dashboard => {
                 self.draw_dashboard(frame, main_area);
             }
-            Screen::TimerManager => {
-                self.draw_timer_manager(frame, main_area);
+            Screen::NewTimer => {
+                self.draw_new_timer(frame, main_area);
             }
             Screen::NewProject => {
                 self.draw_new_project(frame, main_area);
@@ -169,11 +168,12 @@ impl App {
     }
 
     fn on_tick(&mut self) {
-        let diff = TimeFormating::diff_from_now(self.db.current_timer());
-        let diff_formatted = TimeFormating::from_seconds(diff as u64);
+        let timer = self.db.current_timer();
 
-        self.timer = diff_formatted;
-        self.project = self.current_timer_project().name;
+        match timer {
+            Some(timer) => self.timer = Some(timer),
+            None => self.timer = None,
+        }
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -187,8 +187,8 @@ impl App {
                     KeyCode::Char('b') => self.db.backup(),
                     _ => {}
                 },
-                Screen::TimerManager => match key_event.code {
-                    KeyCode::Esc => self.from_screen(Screen::TimerManager),
+                Screen::NewTimer => match key_event.code {
+                    KeyCode::Esc => self.from_screen(Screen::NewTimer),
                     KeyCode::Down => self.project_list.select_next(),
                     KeyCode::Up => self.project_list.select_previous(),
                     KeyCode::Enter => self.start_timer(),
@@ -203,7 +203,7 @@ impl App {
                     KeyCode::Esc => self.from_screen(Screen::Restore),
                     KeyCode::Down => self.backup_list.select_next(),
                     KeyCode::Up => self.backup_list.select_previous(),
-                    KeyCode::Enter => self.restore(),
+                    KeyCode::Enter => self.restore_db(),
                     _ => {}
                 },
             },
@@ -297,12 +297,10 @@ impl App {
             .bg(ACCENT_COLOR)
             .white();
 
-        let db_items = self.db.projects_list();
-        let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
         let projects_list_title = Paragraph::new("Existed projects:")
             .fg(SHADOWED_COLOR)
             .bold();
-        let projects_list = List::new(names).white();
+        let projects_list = List::new(self.db.project_names()).white();
 
         frame.set_cursor_position(Position::new(
             input_area.x + u16::try_from(self.input.character_index).unwrap_or(0),
@@ -315,10 +313,7 @@ impl App {
         frame.render_widget(projects_list, projects_list_area);
     }
 
-    fn draw_timer_manager(&mut self, frame: &mut Frame, area: Rect) {
-        let db_items = self.db.projects_list();
-        let names: Vec<String> = db_items.iter().map(|item| item.name.clone()).collect();
-
+    fn draw_new_timer(&mut self, frame: &mut Frame, area: Rect) {
         let layout = Layout::new(
             Direction::Vertical,
             [Constraint::Length(1), Constraint::Min(1)],
@@ -326,22 +321,35 @@ impl App {
         let [title_area, list_area] = layout.areas(area);
 
         let title = Paragraph::new("Select project:").fg(SHADOWED_COLOR).bold();
-        let list = List::new(names)
+        let project_names: Vec<String> = self
+            .project_list
+            .rich_state
+            .iter()
+            .map(|project| project.name.clone())
+            .collect();
+        let list = List::new(project_names)
             .highlight_style(Style::new().bg(ACCENT_COLOR))
             .highlight_symbol("> ");
 
         frame.render_widget(title, title_area);
-        frame.render_stateful_widget(list, list_area, &mut self.project_list);
+        frame.render_stateful_widget(list, list_area, &mut self.project_list.state);
     }
 
     fn draw_timer(&mut self, frame: &mut Frame, area: Rect) {
-        let is_running = self.db.check_is_running_timer();
-        let timer = &self.timer;
-        let project = &self.project;
-        let text = if is_running {
-            Line::from_iter([project.to_span(), " | ".to_span(), timer.to_span().bold()])
-        } else {
-            Line::from_iter(["No running timer"])
+        let is_running = self.db.is_timer_running();
+        let diff_formatted: String;
+        let text = match &self.timer {
+            Some(timer) => {
+                let diff = TimeFormating::diff_from_now(timer.started_at);
+                diff_formatted = TimeFormating::from_seconds(diff as u64);
+
+                Line::from_iter([
+                    timer.project_name.to_span(),
+                    " | ".to_span(),
+                    diff_formatted.to_span().bold(),
+                ])
+            }
+            None => Line::from_iter(["No running timer"]),
         };
 
         let paragraph = Paragraph::new(text).centered();
@@ -364,7 +372,7 @@ impl App {
 
         let hint = match self.screen {
             Screen::Dashboard => {
-                let timer_hint = if self.db.check_is_running_timer() {
+                let timer_hint = if self.db.is_timer_running() {
                     "top timer | "
                 } else {
                     "tart timer | "
@@ -390,7 +398,7 @@ impl App {
                 get_initial("<ESC>"),
                 get_common(" Cancel "),
             ])),
-            Screen::TimerManager => Paragraph::new(Line::from_iter([
+            Screen::NewTimer => Paragraph::new(Line::from_iter([
                 get_initial("<Up/Down/Enter>"),
                 get_common(" Select project | "),
                 get_initial("<ESC>"),
@@ -423,14 +431,41 @@ impl App {
         frame.render_stateful_widget(list, backup_list_area, &mut self.backup_list);
     }
 
-    fn exit(&mut self) {
-        self.should_exit = true;
+    fn submit_new_project(&mut self) {
+        self.db.add_new_project(&self.input.input);
+    }
+
+    fn manage_timer(&mut self) {
+        if self.db.is_timer_running() {
+            self.timer = None;
+            self.db.stop_timer();
+        } else {
+            self.project_list = RichListState::new(self.db.projects_list());
+            self.to_screen(Screen::NewTimer);
+        }
+    }
+
+    fn start_timer(&mut self) {
+        let timer = self.project_list.selected();
+
+        match timer {
+            Some(timer) => {
+                self.db.start_timer(timer.id);
+                self.timer = self.db.current_timer();
+                self.screen = Screen::Dashboard;
+            }
+            None => {}
+        }
+    }
+
+    fn restore_db(&mut self) {
+        self.db.restore();
     }
 
     fn to_screen(&mut self, screen: Screen) {
         match screen {
-            Screen::TimerManager => {
-                self.project_list.select(Some(0));
+            Screen::NewTimer => {
+                self.project_list.state.select(Some(0));
                 self.screen = screen;
             }
             Screen::NewProject => {
@@ -449,49 +484,13 @@ impl App {
     fn from_screen(&mut self, screen: Screen) {
         match screen {
             Screen::NewProject => self.screen = Screen::Dashboard,
-            Screen::TimerManager => self.screen = Screen::Dashboard,
+            Screen::NewTimer => self.screen = Screen::Dashboard,
             Screen::Restore => self.screen = Screen::Dashboard,
             _ => {}
         }
     }
 
-    fn current_timer_project(&self) -> DbProject {
-        let selected = self
-            .project_list
-            .selected()
-            .expect("Some error while submiting timer with selected project");
-        let projects = self.db.projects_list();
-        let empty_project = DbProject {
-            id: -1,
-            name: String::from(""),
-        };
-        let project = projects.get(selected).unwrap_or_else(|| &empty_project);
-
-        project.clone()
-    }
-
-    fn submit_new_project(&mut self) {
-        self.db.add_new_project(&self.input.input);
-        self.input.input = String::new();
-        self.input.character_index = 0;
-    }
-
-    fn manage_timer(&mut self) {
-        if self.db.check_is_running_timer() {
-            self.db.stop_timer();
-        } else {
-            self.to_screen(Screen::TimerManager);
-        }
-    }
-
-    fn start_timer(&mut self) {
-        self.db.start_timer(self.current_timer_project().id);
-        self.timer = String::from("0s");
-        self.project = self.current_timer_project().name;
-        self.screen = Screen::Dashboard;
-    }
-
-    fn restore(&mut self) {
-        self.db.restore();
+    fn exit(&mut self) {
+        self.should_exit = true;
     }
 }

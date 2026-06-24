@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use rusqlite::{Connection, Error};
+use rusqlite::Connection;
 
 use crate::modules::{time_formatting::TimeFormating, utils::Utils};
 
@@ -20,6 +20,11 @@ impl Clone for DbProject {
             name: self.name.clone(),
         }
     }
+}
+
+pub struct DbTimer {
+    pub project_name: String,
+    pub started_at: i64,
 }
 
 impl Db {
@@ -101,7 +106,7 @@ impl Db {
     }
 
     pub fn start_timer(&self, project_id: i64) {
-        if self.check_is_running_timer() {
+        if self.is_timer_running() {
             panic!("There is already running timer!")
         }
 
@@ -115,7 +120,7 @@ impl Db {
     }
 
     pub fn stop_timer(&mut self) {
-        if !self.check_is_running_timer() {
+        if !self.is_timer_running() {
             panic!("There is no running timer!")
         }
 
@@ -193,7 +198,13 @@ impl Db {
         projects_vec
     }
 
-    pub fn check_is_running_timer(&self) -> bool {
+    pub fn project_names(&self) -> Vec<String> {
+        let db_items = self.projects_list();
+
+        db_items.iter().map(|item| item.name.clone()).collect()
+    }
+
+    pub fn is_timer_running(&self) -> bool {
         let running_timer_id: i64 = self
             .connection
             .query_row(
@@ -206,16 +217,25 @@ impl Db {
         running_timer_id != -1
     }
 
-    pub fn current_timer(&self) -> i64 {
-        let result: Result<i64, Error> = self.connection.query_row(
-            "SELECT started_at FROM timers WHERE stopped_at IS NULL;",
-            [],
-            |row| row.get(0),
-        );
+    pub fn current_timer(&self) -> Option<DbTimer> {
+        let mut query = self
+            .connection
+            .prepare(
+                "SELECT projects.name, timers.started_at, timers.stopped_at
+                FROM timers, projects
+                WHERE stopped_at IS NULL AND timers.project_id = projects.id;",
+            )
+            .expect("Could not select current timer from db");
+        let result = query.query_row([], |row| {
+            Ok(DbTimer {
+                project_name: row.get(0)?,
+                started_at: row.get(1)?,
+            })
+        });
 
         match result {
-            Ok(timer) => timer,
-            _ => -1,
+            Ok(timer) => Some(timer),
+            _ => None,
         }
     }
 
