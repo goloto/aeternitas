@@ -275,18 +275,22 @@ impl App {
             let summary_item = summary.get(i);
             match summary_item {
                 Some(item) => {
-                    let formatted_time = TimeFormating::from_seconds(item.1 as u64);
-                    let title = item.0.clone();
-
-                    let timer_layout = Layout::new(
+                    let timer_wrapper = Block::new().padding(Padding::right(1));
+                    let inner_wrapper_area = timer_wrapper.inner(timers_areas[i]);
+                    let timer_wrapper_layout = Layout::new(
                         Direction::Horizontal,
                         [Constraint::Min(1), Constraint::Min(1)],
                     )
                     .flex(Flex::SpaceBetween);
-                    let [project_name_area, timer_area] = timer_layout.areas(timers_areas[i]);
+                    let [project_name_area, time_area] =
+                        timer_wrapper_layout.areas(inner_wrapper_area);
 
+                    let formatted_time = TimeFormating::from_seconds(item.1 as u64);
+                    let project_name = item.0.clone();
+
+                    frame.render_widget(timer_wrapper, timers_areas[i]);
                     frame.render_widget(
-                        Paragraph::new(title).fg(REGULAR_TEXT_COLOR),
+                        Paragraph::new(project_name).fg(REGULAR_TEXT_COLOR),
                         project_name_area,
                     );
                     frame.render_widget(
@@ -294,7 +298,7 @@ impl App {
                             .bold()
                             .fg(BOLD_TEXT_COLOR)
                             .right_aligned(),
-                        timer_area,
+                        time_area,
                     );
                 }
                 None => continue,
