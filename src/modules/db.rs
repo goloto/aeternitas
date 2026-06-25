@@ -23,8 +23,15 @@ impl Clone for DbProject {
 }
 
 pub struct DbTimer {
+    pub project_id: i64,
     pub project_name: String,
     pub started_at: i64,
+}
+
+pub struct DbSummary {
+    pub project_id: i64,
+    pub project_name: String,
+    pub count: i64,
 }
 
 impl Db {
@@ -221,15 +228,17 @@ impl Db {
         let mut query = self
             .connection
             .prepare(
-                "SELECT projects.name, timers.started_at, timers.stopped_at
-                FROM timers, projects
-                WHERE stopped_at IS NULL AND timers.project_id = projects.id;",
+                "SELECT projects.id, projects.name, timers.started_at
+                    FROM projects, timers
+                    WHERE stopped_at IS NULL AND timers.project_id = projects.id;
+                ",
             )
             .expect("Could not select current timer from db");
         let result = query.query_row([], |row| {
             Ok(DbTimer {
-                project_name: row.get(0)?,
-                started_at: row.get(1)?,
+                project_id: row.get(0)?,
+                project_name: row.get(1)?,
+                started_at: row.get(2)?,
             })
         });
 
@@ -239,31 +248,29 @@ impl Db {
         }
     }
 
-    pub fn summary_by_project(&self) -> Vec<(String, i64)> {
+    pub fn summary_by_project(&self) -> Vec<DbSummary> {
         let mut statement = self
             .connection
             .prepare(
-                "SELECT projects.name, summary.count
-                    FROM summary
-                    JOIN projects
-                        ON projects.id = summary.project_id;
+                "SELECT projects.id, projects.name, summary.count
+                    FROM projects, summary
+                    WHERE projects.id = summary.project_id;
                 ",
             )
             .expect("Could not prepare statement for summary");
-        let rows = statement
+        let rows: Vec<DbSummary> = statement
             .query_map([], |row| {
-                let project_id: String = row.get(0).unwrap_or_else(|_| String::new());
-                let count: i64 = row.get(1).unwrap_or_else(|_| 0);
-
-                Ok((project_id, count))
+                Ok(DbSummary {
+                    project_id: row.get(0)?,
+                    project_name: row.get(1)?,
+                    count: row.get(2)?,
+                })
             })
-            .expect("Error while quering summary");
-        let mut result = Vec::new();
-        for row in rows {
-            result.push(row.expect("Could not unwrap row for summary"));
-        }
+            .expect("Error while quering summary")
+            .map(|row| row.unwrap())
+            .collect();
 
-        result
+        rows
     }
 
     pub fn backup(&self) {

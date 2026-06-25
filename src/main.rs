@@ -40,6 +40,7 @@ pub struct App {
     backup_list: ListState,
     backuper: Backuper,
     timer: Option<DbTimer>,
+    tick: bool,
 }
 
 enum Screen {
@@ -60,6 +61,7 @@ impl App {
             backup_list: ListState::default().with_selected(Some(0)),
             backuper: Backuper::new(),
             timer: None,
+            tick: false,
         }
     }
 
@@ -169,6 +171,7 @@ impl App {
     }
 
     fn on_tick(&mut self) {
+        self.tick = !self.tick;
         let timer = self.db.current_timer();
 
         match timer {
@@ -219,7 +222,7 @@ impl App {
         if is_empty {
             let empty_block = Block::new()
                 .padding(Padding::new(0, 0, 0, 1))
-                .title("No projects yet")
+                .title("No finished timers yet")
                 .fg(REGULAR_TEXT_COLOR)
                 .title_alignment(HorizontalAlignment::Center);
 
@@ -244,9 +247,12 @@ impl App {
         let [last_week_title_area, last_week_area] = vertical_layout.areas(last_week_area);
         let [current_week_title_area, current_week_area] = vertical_layout.areas(current_week_area);
 
-        frame.render_widget(Paragraph::new("Overall:"), overall_title_area);
-        frame.render_widget(Paragraph::new("Last week:"), last_week_title_area);
-        frame.render_widget(Paragraph::new("Current week:"), current_week_title_area);
+        frame.render_widget(Paragraph::new("Overall").centered(), overall_title_area);
+        frame.render_widget(Paragraph::new("Last week").centered(), last_week_title_area);
+        frame.render_widget(
+            Paragraph::new("Current week").centered(),
+            current_week_title_area,
+        );
 
         let summary = self.db.summary_by_project();
         let constraints: Vec<Constraint> = summary.iter().map(|_| Constraint::Length(1)).collect();
@@ -260,8 +266,8 @@ impl App {
             let summary_item = summary.get(i);
             match summary_item {
                 Some(item) => {
-                    if item.1 > max {
-                        max = item.1;
+                    if item.count > max {
+                        max = item.count;
                     }
                 }
                 None => continue,
@@ -285,14 +291,28 @@ impl App {
                     let [project_name_area, time_area] =
                         timer_wrapper_layout.areas(inner_wrapper_area);
 
-                    let formatted_time = TimeFormating::from_seconds(item.1 as u64);
-                    let project_name = item.0.clone();
+                    let formatted_time = TimeFormating::from_seconds(item.count as u64);
+                    let project_name = item.project_name.clone();
+
+                    let symbol = if self.tick {
+                        Span::from(">").fg(ACCENT_COLOR)
+                    } else {
+                        Span::from(">").fg(REGULAR_TEXT_COLOR)
+                    };
+                    let project_paragraph = Span::from(project_name).fg(REGULAR_TEXT_COLOR);
+                    let project_paragraph = match &self.timer {
+                        Some(timer) => {
+                            if timer.project_id == item.project_id {
+                                Line::from_iter([symbol, " ".to_span(), project_paragraph])
+                            } else {
+                                Line::from_iter([project_paragraph])
+                            }
+                        }
+                        None => Line::from_iter([project_paragraph]),
+                    };
 
                     frame.render_widget(timer_wrapper, timers_areas[i]);
-                    frame.render_widget(
-                        Paragraph::new(project_name).fg(REGULAR_TEXT_COLOR),
-                        project_name_area,
-                    );
+                    frame.render_widget(project_paragraph, project_name_area);
                     frame.render_widget(
                         Paragraph::new(formatted_time)
                             .bold()
