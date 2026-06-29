@@ -3,13 +3,20 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::modules::{
-    backuper::Backuper,
-    db::{Db, DbProject, DbTimer},
-    input::Input,
-    rich_list_state::RichListState,
-    time_formatting::TimeFormating,
-    utils::Utils,
+use crate::{
+    modules::{
+        animation::Animation,
+        backuper::Backuper,
+        db::{Db, DbProject, DbTimer},
+        input::Input,
+        rich_list_state::RichListState,
+        time_formatting::TimeFormating,
+        utils::Utils,
+    },
+    resources::{
+        color_palette::{ACCENT_COLOR, BOLD_TEXT_COLOR, REGULAR_TEXT_COLOR, RUNNING_TIMER_COLOR},
+        timer_animation::create_timer_animation,
+    },
 };
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -21,17 +28,13 @@ use ratatui::{
 };
 
 mod modules;
-
-const ACCENT_COLOR: Color = Color::Rgb(239, 100, 97);
-const RUNNING_TIMER_COLOR: Color = Color::Rgb(189, 247, 183);
-const REGULAR_TEXT_COLOR: Color = Color::DarkGray;
-const BOLD_TEXT_COLOR: Color = Color::Rgb(6, 41, 45);
+mod resources;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
 }
 
-pub struct App {
+pub struct App<'a> {
     should_exit: bool,
     screen: Screen,
     input: Input,
@@ -41,6 +44,7 @@ pub struct App {
     backuper: Backuper,
     timer: Option<DbTimer>,
     tick: bool,
+    timer_animation: Animation<Line<'a>>,
 }
 
 enum Screen {
@@ -50,7 +54,7 @@ enum Screen {
     Restore,
 }
 
-impl App {
+impl<'a> App<'a> {
     fn new() -> Self {
         Self {
             should_exit: false,
@@ -62,6 +66,7 @@ impl App {
             backuper: Backuper::new(),
             timer: None,
             tick: false,
+            timer_animation: Animation::new(create_timer_animation()),
         }
     }
 
@@ -69,18 +74,18 @@ impl App {
         let app_dir = Utils::get_app_dir();
         fs::create_dir_all(&app_dir).expect("Could not create working directory");
 
-        let mut last_tick = Instant::now();
+        let mut last_second_tick = Instant::now();
         self.on_tick();
 
         loop {
             terminal.draw(|frame| self.draw(frame))?;
 
             let tick_rate = Duration::from_millis(1000);
-            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+            let timeout = tick_rate.saturating_sub(last_second_tick.elapsed());
 
             if !event::poll(timeout)? {
                 self.on_tick();
-                last_tick = Instant::now();
+                last_second_tick = Instant::now();
                 continue;
             }
 
@@ -130,7 +135,7 @@ impl App {
             main_area,
             _main_spacer_area,
             timer_area,
-            _timer_spacer_area,
+            timer_spacer_area,
             hint_area,
         ] = frame.area().layout(&layout);
         let title = Line::from_iter([
@@ -150,6 +155,9 @@ impl App {
         ])
         .centered();
         frame.render_widget(title, title_area);
+
+        // TODO: clear after testing
+        frame.render_widget(self.timer_animation.current(), timer_spacer_area);
 
         self.draw_timer(frame, timer_area);
         self.draw_hint(frame, hint_area);
@@ -177,6 +185,10 @@ impl App {
         match timer {
             Some(timer) => self.timer = Some(timer),
             None => self.timer = None,
+        }
+
+        if self.db.is_timer_running() {
+            self.timer_animation.next();
         }
     }
 
@@ -494,6 +506,7 @@ impl App {
         if self.db.is_timer_running() {
             self.timer = None;
             self.db.stop_timer();
+            self.timer_animation.reset();
         } else {
             self.project_list = RichListState::new(self.db.projects_list());
             self.to_screen(Screen::NewTimer);

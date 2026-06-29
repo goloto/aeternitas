@@ -1,3 +1,4 @@
+pub mod animation;
 pub mod backuper;
 pub mod db;
 pub mod input;
