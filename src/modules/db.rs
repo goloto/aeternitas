@@ -25,6 +25,7 @@ impl Clone for DbProject {
 pub struct DbTimer {
     pub project_id: i64,
     pub project_name: String,
+    pub id: i64,
     pub started_at: i64,
 }
 
@@ -73,17 +74,6 @@ impl Db {
                 [],
             )
             .expect("Something wrong while creating timers table");
-
-        self.connection
-            .execute(
-                "CREATE TABLE IF NOT EXISTS summary (
-                id         INTEGER PRIMARY KEY,
-                project_id INTEGER NOT NULL REFERENCES projects(id),
-                count      INTEGER DEFAULT NULL
-            );",
-                [],
-            )
-            .expect("Something wrong while creating summary table");
     }
 
     pub fn add_new_project(&mut self, name: &str) {
@@ -126,57 +116,22 @@ impl Db {
             .expect("Could not insert new timer to db");
     }
 
-    pub fn stop_timer(&mut self) {
+    pub fn stop_timer(&self) {
         if !self.is_timer_running() {
             panic!("There is no running timer!")
         }
 
-        let transaction = self
-            .connection
-            .transaction()
-            .expect("Could not open transaction");
-
         let stopped_at = TimeFormating::current_time();
-        let (timer_id, project_id): (i64, i64) = transaction
-            .query_row(
-                "SELECT id, project_id FROM timers WHERE stopped_at IS NULL;",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .expect("Could not select id and project_id for current timer");
-        let started_at: i64 = transaction
-            .query_row(
-                "SELECT started_at FROM timers WHERE id = ?1",
-                [timer_id],
-                |row| row.get(0),
-            )
-            .expect("Could not receive time when started current timer");
-        let current_session = TimeFormating::diff_from_now(started_at);
-        let summary: i64 = transaction
-            .query_row(
-                "SELECT count FROM summary WHERE project_id = ?1",
-                [project_id],
-                |row| row.get(0),
-            )
-            .expect("Could not receive summary");
-
-        transaction
+        let timer_id = self
+            .current_timer()
+            .expect("Could not select id and project_id for current timer")
+            .id;
+        self.connection
             .execute(
                 "UPDATE timers SET stopped_at = ?1 WHERE id = ?2;",
                 [stopped_at, timer_id],
             )
             .expect("Could not insert new timer to db");
-
-        transaction
-            .execute(
-                "UPDATE summary SET count = ?1 WHERE project_id = ?2",
-                [summary + current_session, project_id],
-            )
-            .expect("");
-
-        transaction
-            .commit()
-            .expect("Could not commit stopping timer transaction");
     }
 
     pub fn projects_list(&self) -> Vec<DbProject> {
@@ -228,7 +183,7 @@ impl Db {
         let mut query = self
             .connection
             .prepare(
-                "SELECT projects.id, projects.name, timers.started_at
+                "SELECT projects.id, projects.name, timers.id, timers.started_at
                     FROM projects, timers
                     WHERE stopped_at IS NULL AND timers.project_id = projects.id;
                 ",
@@ -238,7 +193,8 @@ impl Db {
             Ok(DbTimer {
                 project_id: row.get(0)?,
                 project_name: row.get(1)?,
-                started_at: row.get(2)?,
+                id: row.get(2)?,
+                started_at: row.get(3)?,
             })
         });
 
@@ -252,9 +208,10 @@ impl Db {
         let mut statement = self
             .connection
             .prepare(
-                "SELECT projects.id, projects.name, summary.count
-                    FROM projects, summary
-                    WHERE projects.id = summary.project_id;
+                "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
+                    FROM timers, projects
+                    WHERE timers.project_id = projects.id
+                    GROUP BY project_id;
                 ",
             )
             .expect("Could not prepare statement for summary");
