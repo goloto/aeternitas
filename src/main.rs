@@ -7,7 +7,7 @@ use crate::{
     modules::{
         animation::Animation,
         backuper::Backuper,
-        db::{Db, DbProject, DbTimer},
+        db::{Db, DbProject, DbSummary, DbTimer},
         input::Input,
         rich_list_state::RichListState,
         time_formatting::TimeFormating,
@@ -45,6 +45,7 @@ pub struct App<'a> {
     timer: Option<DbTimer>,
     tick: bool,
     timer_animation: Animation<Line<'a>>,
+    summary: Option<Vec<DbSummary>>,
 }
 
 enum Screen {
@@ -67,6 +68,7 @@ impl<'a> App<'a> {
             timer: None,
             tick: false,
             timer_animation: Animation::new(create_timer_animation()),
+            summary: None,
         }
     }
 
@@ -75,17 +77,25 @@ impl<'a> App<'a> {
         fs::create_dir_all(&app_dir).expect("Could not create working directory");
 
         let mut last_second_tick = Instant::now();
+        let mut last_minute_tick = Instant::now();
         self.on_tick();
+        self.update_statistics();
 
         loop {
             terminal.draw(|frame| self.draw(frame))?;
 
-            let tick_rate = Duration::from_millis(1000);
+            let tick_rate = Duration::from_secs(1);
             let timeout = tick_rate.saturating_sub(last_second_tick.elapsed());
 
             if !event::poll(timeout)? {
                 self.on_tick();
                 last_second_tick = Instant::now();
+
+                if last_minute_tick.elapsed() >= Duration::from_mins(1) {
+                    self.update_statistics();
+                    last_minute_tick = Instant::now();
+                }
+
                 continue;
             }
 
@@ -189,6 +199,10 @@ impl<'a> App<'a> {
         }
     }
 
+    fn update_statistics(&mut self) {
+        self.summary = Some(self.db.summary_by_project());
+    }
+
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match self.screen {
@@ -225,7 +239,7 @@ impl<'a> App<'a> {
         Ok(())
     }
 
-    fn draw_dashboard(&mut self, frame: &mut Frame, area: Rect) {
+    fn draw_dashboard(&self, frame: &mut Frame, area: Rect) {
         let is_empty = self.db.projects_list().len() == 0;
 
         if is_empty {
@@ -263,7 +277,10 @@ impl<'a> App<'a> {
             current_week_title_area,
         );
 
-        let summary = self.db.summary_by_project();
+        let summary = match &self.summary {
+            Some(summary) => summary,
+            None => panic!("Haven't find any summary"),
+        };
         let constraints: Vec<Constraint> = summary.iter().map(|_| Constraint::Length(1)).collect();
         let timers_layout = Layout::new(Direction::Vertical, constraints);
         let timers_count = summary.len();
@@ -547,6 +564,7 @@ impl<'a> App<'a> {
             self.timer = None;
             self.db.stop_timer();
             self.timer_animation.reset();
+            self.update_statistics();
         } else {
             self.project_list = RichListState::new(self.db.projects_list());
             self.to_screen(Screen::NewTimer);

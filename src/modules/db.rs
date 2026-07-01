@@ -205,7 +205,7 @@ impl Db {
     }
 
     pub fn summary_by_project(&self) -> Vec<DbSummary> {
-        let mut statement = self
+        let mut query = self
             .connection
             .prepare(
                 "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
@@ -215,7 +215,7 @@ impl Db {
                 ",
             )
             .expect("Could not prepare statement for summary");
-        let rows: Vec<DbSummary> = statement
+        let rows: Vec<DbSummary> = query
             .query_map([], |row| {
                 Ok(DbSummary {
                     project_id: row.get(0)?,
