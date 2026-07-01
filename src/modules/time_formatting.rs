@@ -37,6 +37,22 @@ impl TimeFormating {
         }
     }
 
+    pub fn from_seconds_short(seconds: u64) -> String {
+        if seconds > SECONDS_IN_HOUR {
+            let (hours, hours_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_HOUR);
+            let (minutes, _minutes_remainder) =
+                TimeFormating::euclid(hours_remainder, SECONDS_IN_MINUTE);
+
+            format!("{hours}h {minutes}m")
+        } else if seconds > SECONDS_IN_MINUTE {
+            let (minutes, _minutes_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_MINUTE);
+
+            format!("{minutes}m")
+        } else {
+            format!("0m")
+        }
+    }
+
     pub fn current_time() -> i64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -300,7 +300,7 @@ impl<'a> App<'a> {
                     let [project_name_area, time_area] =
                         timer_wrapper_layout.areas(inner_wrapper_area);
 
-                    let formatted_time = TimeFormating::from_seconds(item.count as u64);
+                    let formatted_time = TimeFormating::from_seconds_short(item.count as u64);
                     let project_name = item.project_name.clone();
 
                     let symbol = if self.tick {
