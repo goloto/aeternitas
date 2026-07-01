@@ -135,7 +135,7 @@ impl<'a> App<'a> {
             main_area,
             _main_spacer_area,
             timer_area,
-            timer_spacer_area,
+            _timer_spacer_area,
             hint_area,
         ] = frame.area().layout(&layout);
         let title = Line::from_iter([
@@ -155,9 +155,6 @@ impl<'a> App<'a> {
         ])
         .centered();
         frame.render_widget(title, title_area);
-
-        // TODO: clear after testing
-        frame.render_widget(self.timer_animation.current(), timer_spacer_area);
 
         self.draw_timer(frame, timer_area);
         self.draw_hint(frame, hint_area);
@@ -419,14 +416,40 @@ impl<'a> App<'a> {
             None => Line::from_iter(["No running timer"]),
         };
 
+        let layout = Layout::new(
+            Direction::Horizontal,
+            [
+                Constraint::Length(8),
+                Constraint::Min(1),
+                Constraint::Length(8),
+            ],
+        );
+        let [animation_area_1, timer_area, animation_area_2] = layout.areas(area);
+
         let timer = Paragraph::new(text).centered();
         let timer = if is_running {
             timer.bg(RUNNING_TIMER_COLOR).fg(Color::Black)
         } else {
             timer.bg(ACCENT_COLOR)
         };
+        let animation: Line = if is_running {
+            self.timer_animation.current().clone()
+        } else {
+            Line::from_iter([
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+                " ".to_span().bg(ACCENT_COLOR),
+            ])
+        };
 
-        frame.render_widget(timer, area);
+        frame.render_widget(&animation, animation_area_1);
+        frame.render_widget(timer, timer_area);
+        frame.render_widget(&animation, animation_area_2);
     }
 
     fn draw_hint(&mut self, frame: &mut Frame, area: Rect) {
