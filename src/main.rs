@@ -416,12 +416,29 @@ impl<'a> App<'a> {
             None => Line::from_iter(["No running timer"]),
         };
 
+        let animation: Line = if is_running {
+            self.timer_animation.current().clone()
+        } else {
+            let empty_block = " ".to_span().bg(ACCENT_COLOR);
+
+            Line::from_iter([
+                empty_block.clone(),
+                empty_block.clone(),
+                empty_block.clone(),
+                empty_block.clone(),
+                empty_block.clone(),
+                empty_block.clone(),
+                empty_block.clone(),
+                empty_block.clone(),
+            ])
+        };
+        let animation_length = animation.iter().len() as u16;
         let layout = Layout::new(
             Direction::Horizontal,
             [
-                Constraint::Length(8),
+                Constraint::Length(animation_length),
                 Constraint::Min(1),
-                Constraint::Length(8),
+                Constraint::Length(animation_length),
             ],
         );
         let [animation_area_1, timer_area, animation_area_2] = layout.areas(area);
