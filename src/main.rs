@@ -21,7 +21,12 @@ use crate::{
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Direction, Flex, HorizontalAlignment, Layout, Position, Rect},
+    layout::{
+        Constraint, Direction,
+        Flex::{self},
+        HorizontalAlignment, Layout, Position, Rect,
+        Spacing::Space,
+    },
     style::{Color, Style, Stylize},
     text::{Line, Span, ToSpan},
     widgets::{Block, List, ListState, Padding, Paragraph},
@@ -130,28 +135,15 @@ impl<'a> App<'a> {
         let layout = Layout::vertical(vec![
             // title
             Constraint::Length(1),
-            // empty line
-            Constraint::Length(1),
             // main area
             Constraint::Length(main_area_height),
-            // empty line
-            Constraint::Length(1),
             // timer
-            Constraint::Length(1),
-            // empty line
             Constraint::Length(1),
             // hint
             Constraint::Length(1),
-        ]);
-        let [
-            title_area,
-            _title_spacer_area,
-            main_area,
-            _main_spacer_area,
-            timer_area,
-            _timer_spacer_area,
-            hint_area,
-        ] = frame.area().layout(&layout);
+        ])
+        .spacing(Space(1));
+        let [title_area, main_area, timer_area, hint_area] = frame.area().layout(&layout);
         let title = Line::from_iter([
             "A".light_red().bold(),
             "e".red().bold(),
@@ -266,11 +258,13 @@ impl<'a> App<'a> {
                 Constraint::Ratio(1, 3),
                 Constraint::Ratio(1, 3),
             ],
-        );
+        )
+        .spacing(Space(3));
         let vertical_layout = Layout::new(
             Direction::Vertical,
-            [Constraint::Length(2), Constraint::Min(1)],
-        );
+            [Constraint::Length(1), Constraint::Min(1)],
+        )
+        .spacing(Space(1));
         let [overall_area, last_week_area, current_week_area] = horizontal_layout.areas(area);
         let [overall_title_area, overall_area] = vertical_layout.areas(overall_area);
         let [last_week_title_area, last_week_area] = vertical_layout.areas(last_week_area);
@@ -328,15 +322,13 @@ impl<'a> App<'a> {
             let summary_item = summary.get(i);
             match summary_item {
                 Some(item) => {
-                    let timer_wrapper = Block::new().padding(Padding::right(1));
-                    let inner_wrapper_area = timer_wrapper.inner(timers_areas[i]);
                     let timer_wrapper_layout = Layout::new(
                         Direction::Horizontal,
                         [Constraint::Min(1), Constraint::Min(1)],
                     )
                     .flex(Flex::SpaceBetween);
                     let [project_name_area, time_area] =
-                        timer_wrapper_layout.areas(inner_wrapper_area);
+                        timer_wrapper_layout.areas(timers_areas[i]);
 
                     let formatted_time = TimeFormating::from_seconds_short(item.count as u64);
                     let project_name = item.project_name.clone();
@@ -358,7 +350,6 @@ impl<'a> App<'a> {
                         None => Line::from_iter([project_paragraph]),
                     };
 
-                    frame.render_widget(timer_wrapper, timers_areas[i]);
                     frame.render_widget(project_paragraph, project_name_area);
                     frame.render_widget(
                         Paragraph::new(formatted_time)
