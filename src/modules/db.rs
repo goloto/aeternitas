@@ -204,7 +204,7 @@ impl Db {
         }
     }
 
-    pub fn summary_by_project(&self) -> Vec<DbSummary> {
+    pub fn summary_overall(&self) -> Vec<DbSummary> {
         let mut query = self
             .connection
             .prepare(
@@ -214,7 +214,7 @@ impl Db {
                     GROUP BY project_id;
                 ",
             )
-            .expect("Could not prepare statement for summary");
+            .expect("Could not prepare statement for overall summary");
         let rows: Vec<DbSummary> = query
             .query_map([], |row| {
                 Ok(DbSummary {
@@ -223,7 +223,61 @@ impl Db {
                     count: row.get(2)?,
                 })
             })
-            .expect("Error while quering summary")
+            .expect("Error while quering overall summary")
+            .map(|row| row.unwrap())
+            .collect();
+
+        rows
+    }
+
+    pub fn summary_current_week(&self) -> Vec<DbSummary> {
+        let (week_start, _week_end) = TimeFormating::current_week();
+        let mut query = self
+            .connection
+            .prepare(
+                "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
+                    FROM timers, projects
+                    WHERE timers.project_id = projects.id AND timers.started_at > ?1
+                    GROUP BY project_id;
+                ",
+            )
+            .expect("Could not prepare statement for current week summary");
+        let rows: Vec<DbSummary> = query
+            .query_map([week_start], |row| {
+                Ok(DbSummary {
+                    project_id: row.get(0)?,
+                    project_name: row.get(1)?,
+                    count: row.get(2)?,
+                })
+            })
+            .expect("Error while quering current week summary")
+            .map(|row| row.unwrap())
+            .collect();
+
+        rows
+    }
+
+    pub fn summary_last_week(&self) -> Vec<DbSummary> {
+        let (week_start, week_end) = TimeFormating::previous_week();
+        let mut query = self
+            .connection
+            .prepare(
+                "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
+                    FROM timers, projects
+                    WHERE timers.project_id = projects.id AND timers.started_at > ?1 AND timers.stopped_at < ?2
+                    GROUP BY project_id;
+                ",
+            )
+            .expect("Could not prepare statement for last week summary");
+        let rows: Vec<DbSummary> = query
+            .query_map([week_start, week_end], |row| {
+                Ok(DbSummary {
+                    project_id: row.get(0)?,
+                    project_name: row.get(1)?,
+                    count: row.get(2)?,
+                })
+            })
+            .expect("Error while quering last week summary")
             .map(|row| row.unwrap())
             .collect();
 

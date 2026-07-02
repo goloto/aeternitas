@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct TimeFormating {}
 
+const SECONDS_IN_WEEK: i64 = 60 * 60 * 24 * 7;
 const SECONDS_IN_DAY: u64 = 60 * 60 * 24;
 const SECONDS_IN_HOUR: u64 = 60 * 60;
 const SECONDS_IN_MINUTE: u64 = 60;
@@ -62,5 +63,21 @@ impl TimeFormating {
 
     pub fn diff_from_now(time: i64) -> i64 {
         TimeFormating::current_time() - time
+    }
+
+    pub fn current_week() -> (i64, i64) {
+        let current_time = TimeFormating::current_time();
+        let week_start =
+            current_time - current_time.rem_euclid(SECONDS_IN_WEEK) - 4 * SECONDS_IN_DAY as i64;
+        let week_end = week_start + SECONDS_IN_WEEK;
+
+        (week_start, week_end)
+    }
+
+    pub fn previous_week() -> (i64, i64) {
+        let (current_week_start, _current_week_end) = TimeFormating::current_week();
+        let previous_week_start = current_week_start - SECONDS_IN_WEEK;
+
+        (previous_week_start, current_week_start)
     }
 }

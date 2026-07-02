@@ -45,7 +45,9 @@ pub struct App<'a> {
     timer: Option<DbTimer>,
     tick: bool,
     timer_animation: Animation<Line<'a>>,
-    summary: Option<Vec<DbSummary>>,
+    overall_summary: Option<Vec<DbSummary>>,
+    current_week_summary: Option<Vec<DbSummary>>,
+    last_week_summary: Option<Vec<DbSummary>>,
 }
 
 enum Screen {
@@ -68,7 +70,9 @@ impl<'a> App<'a> {
             timer: None,
             tick: false,
             timer_animation: Animation::new(create_timer_animation()),
-            summary: None,
+            overall_summary: None,
+            current_week_summary: None,
+            last_week_summary: None,
         }
     }
 
@@ -200,7 +204,9 @@ impl<'a> App<'a> {
     }
 
     fn update_statistics(&mut self) {
-        self.summary = Some(self.db.summary_by_project());
+        self.overall_summary = Some(self.db.summary_overall());
+        self.current_week_summary = Some(self.db.summary_current_week());
+        self.last_week_summary = Some(self.db.summary_last_week());
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -277,14 +283,29 @@ impl<'a> App<'a> {
             current_week_title_area,
         );
 
-        let summary = match &self.summary {
+        let overall_summary = match &self.overall_summary {
             Some(summary) => summary,
-            None => panic!("Haven't find any summary"),
+            None => panic!("Haven't find any overall summary"),
         };
+        let last_week_summary = match &self.last_week_summary {
+            Some(summary) => summary,
+            None => panic!("Haven't find any previous week summary"),
+        };
+        let current_week_summary = match &self.current_week_summary {
+            Some(summary) => summary,
+            None => panic!("Haven't find any curremt week summary"),
+        };
+
+        self.draw_summary(overall_summary, overall_area, frame);
+        self.draw_summary(last_week_summary, last_week_area, frame);
+        self.draw_summary(current_week_summary, current_week_area, frame);
+    }
+
+    fn draw_summary(&self, summary: &Vec<DbSummary>, area: Rect, frame: &mut Frame) {
         let constraints: Vec<Constraint> = summary.iter().map(|_| Constraint::Length(1)).collect();
         let timers_layout = Layout::new(Direction::Vertical, constraints);
         let timers_count = summary.len();
-        let timers_areas: Vec<Rect> = overall_area.layout_vec(&timers_layout);
+        let timers_areas: Vec<Rect> = area.layout_vec(&timers_layout);
         let mut i = 0;
         let mut max = 1;
 
