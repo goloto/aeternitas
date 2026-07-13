@@ -237,7 +237,7 @@ impl Db {
             .prepare(
                 "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
                     FROM timers, projects
-                    WHERE timers.project_id = projects.id AND timers.started_at > ?1
+                    WHERE timers.project_id = projects.id AND timers.started_at >= ?1 AND timers.stopped_at IS NOT NULL
                     GROUP BY project_id;
                 ",
             )
@@ -264,7 +264,7 @@ impl Db {
             .prepare(
                 "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
                     FROM timers, projects
-                    WHERE timers.project_id = projects.id AND timers.started_at > ?1 AND timers.stopped_at < ?2
+                    WHERE timers.project_id = projects.id AND timers.started_at >= ?1 AND timers.stopped_at <= ?2
                     GROUP BY project_id;
                 ",
             )
