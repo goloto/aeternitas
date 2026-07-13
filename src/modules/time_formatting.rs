@@ -86,19 +86,24 @@ impl TimeFormating {
 mod tests {
     use super::*;
 
+    fn calc_week_from_anchor(anchor: i64) -> (i64, i64) {
+        let current_time = TimeFormating::current_time();
+
+        let expected_week_start =
+            anchor + (current_time - anchor).div_euclid(SECONDS_IN_WEEK) * SECONDS_IN_WEEK;
+        let expected_week_finish = expected_week_start + SECONDS_IN_WEEK - 1;
+
+        (expected_week_start, expected_week_finish)
+    }
+
     #[test]
     fn test_current_week() {
         // 13 июля 2026 00:00, понедельник
         const TEST_WEEK_START: i64 = 1783900800;
-        let current_time = TimeFormating::current_time();
-
-        let expected_week_start = TEST_WEEK_START
-            + (current_time - TEST_WEEK_START).div_euclid(SECONDS_IN_WEEK) * SECONDS_IN_WEEK;
-        let expected_week_finish = expected_week_start + SECONDS_IN_WEEK - 1;
 
         assert_eq!(
             TimeFormating::current_week(),
-            (expected_week_start, expected_week_finish)
+            calc_week_from_anchor(TEST_WEEK_START)
         );
     }
 
@@ -106,15 +111,10 @@ mod tests {
     fn test_previous_week() {
         // 6 июля 2026 00:00, понедельник
         const TEST_WEEK_START: i64 = 1783296000;
-        let current_time = TimeFormating::current_time();
-
-        let expected_week_start = TEST_WEEK_START
-            + (current_time - TEST_WEEK_START).div_euclid(SECONDS_IN_WEEK) * SECONDS_IN_WEEK;
-        let expected_week_finish = expected_week_start + SECONDS_IN_WEEK - 1;
 
         assert_eq!(
             TimeFormating::current_week(),
-            (expected_week_start, expected_week_finish)
+            calc_week_from_anchor(TEST_WEEK_START)
         );
     }
 }
