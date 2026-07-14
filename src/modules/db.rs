@@ -35,6 +35,16 @@ pub struct DbSummary {
     pub count: i64,
 }
 
+impl Clone for DbSummary {
+    fn clone(&self) -> Self {
+        Self {
+            project_id: self.project_id,
+            project_name: self.project_name.clone(),
+            count: self.count,
+        }
+    }
+}
+
 impl Db {
     pub fn new() -> Self {
         let connection = Connection::open(Db::db_path()).expect("Could not open db");

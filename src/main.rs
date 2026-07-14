@@ -296,15 +296,21 @@ impl<'a> App<'a> {
     }
 
     fn draw_summary(&self, summary: &Vec<DbSummary>, area: Rect, frame: &mut Frame) {
-        let constraints: Vec<Constraint> = summary.iter().map(|_| Constraint::Length(1)).collect();
+        let mut sorted_summary = summary.clone();
+        sorted_summary.sort_by_key(|item| -item.count);
+
+        let constraints: Vec<Constraint> = sorted_summary
+            .iter()
+            .map(|_| Constraint::Length(1))
+            .collect();
         let timers_layout = Layout::new(Direction::Vertical, constraints);
-        let timers_count = summary.len();
+        let timers_count = sorted_summary.len();
         let timers_areas: Vec<Rect> = area.layout_vec(&timers_layout);
         let mut i = 0;
         let mut max = 1;
 
         while i < timers_count {
-            let summary_item = summary.get(i);
+            let summary_item = sorted_summary.get(i);
             match summary_item {
                 Some(item) => {
                     if item.count > max {
@@ -319,7 +325,7 @@ impl<'a> App<'a> {
         i = 0;
 
         while i < timers_count {
-            let summary_item = summary.get(i);
+            let summary_item = sorted_summary.get(i);
             match summary_item {
                 Some(item) => {
                     let timer_wrapper_layout = Layout::new(
