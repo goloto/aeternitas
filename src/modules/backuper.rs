@@ -19,8 +19,8 @@ impl Backuper {
 
     fn calculate_list() -> Vec<String> {
         let mut list = Vec::new();
-        let app_dir = Utils::get_app_dir();
-        let app_dir = fs::read_dir(app_dir).expect("Could not read app directory");
+        let app_dir = Utils::get_backups_dir();
+        let app_dir = fs::read_dir(app_dir).expect("Could not read backups directory");
 
         for entry in app_dir {
             let path = entry

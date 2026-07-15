@@ -10,4 +10,11 @@ impl Utils {
 
         data_path
     }
+
+    pub fn get_backups_dir() -> PathBuf {
+        let mut data_path = Utils::get_app_dir();
+        data_path.push("backups");
+
+        data_path
+    }
 }

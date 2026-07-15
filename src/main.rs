@@ -84,6 +84,8 @@ impl<'a> App<'a> {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let app_dir = Utils::get_app_dir();
         fs::create_dir_all(&app_dir).expect("Could not create working directory");
+        let backup_dir = Utils::get_backups_dir();
+        fs::create_dir_all(&backup_dir).expect("Could not create backup directory");
 
         let mut last_second_tick = Instant::now();
         let mut last_minute_tick = Instant::now();
