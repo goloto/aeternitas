@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, backup::Backup};
 
 use crate::modules::{time_formatting::TimeFormating, utils::Utils};
 
@@ -60,6 +60,14 @@ impl Db {
         app_dir.set_extension("db");
 
         app_dir
+    }
+
+    fn backup_path(name: &str) -> PathBuf {
+        let mut backup_dir = Utils::get_backups_dir();
+        backup_dir.push(name);
+        backup_dir.set_extension("db");
+
+        backup_dir
     }
 
     fn migrate_v1(&self) {
@@ -296,19 +304,28 @@ impl Db {
 
     pub fn backup(&self) {
         let now = TimeFormating::current_time();
-        let db_path = Utils::get_app_dir();
-        let db_path = db_path
-            .to_str()
-            .expect("Could not retrive path to app directory");
-        let backup_file_name =
-            String::from(format!("{db_path}/aeternitas_backup_{now}").to_string());
+        let backup_file_name = format!("aeternitas_backup_{now}");
+        let backup_file_name = backup_file_name.as_str();
 
-        self.connection
-            .execute("VACUUM INTO ?1;", [backup_file_name])
-            .expect("Could not create db backup");
+        let mut backup_connection = Connection::open(Db::backup_path(backup_file_name)).unwrap();
+        let backup = Backup::new(&self.connection, &mut backup_connection).unwrap();
+
+        backup
+            .run_to_completion(1, Duration::from_secs(1), None)
+            .unwrap();
     }
 
-    pub fn restore(&self) {
-        todo!();
+    pub fn restore(&mut self, name: &str) {
+        let mut backups_path = Utils::get_backups_dir();
+        backups_path.push(name);
+        let backups_path = backups_path.to_str().unwrap();
+
+        self.connection
+            .restore(
+                self.connection.db_name(0).unwrap().as_str(),
+                backups_path,
+                Some(|_| {}),
+            )
+            .expect("Could not restore db");
     }
 }
