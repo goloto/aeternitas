@@ -220,7 +220,7 @@ impl Db {
             .prepare(
                 "SELECT timers.project_id, projects.name, SUM(timers.stopped_at - timers.started_at)
                     FROM timers, projects
-                    WHERE timers.project_id = projects.id
+                    WHERE timers.project_id = projects.id AND timers.stopped_at IS NOT NULL
                     GROUP BY project_id;
                 ",
             )
