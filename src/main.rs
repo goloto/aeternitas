@@ -29,7 +29,7 @@ use ratatui::{
     },
     style::{Color, Style, Stylize},
     text::{Line, Span, ToSpan},
-    widgets::{Block, List, ListState, Padding, Paragraph},
+    widgets::{Block, List, Padding, Paragraph},
 };
 
 mod modules;
@@ -45,7 +45,7 @@ pub struct App<'a> {
     input: Input,
     db: Db,
     project_list: RichListState<DbProject>,
-    backup_list: ListState,
+    backup_list: RichListState<String>,
     backuper: Backuper,
     timer: Option<DbTimer>,
     tick: bool,
@@ -70,7 +70,7 @@ impl<'a> App<'a> {
             input: Input::new(),
             db: Db::new(),
             project_list: RichListState::default(),
-            backup_list: ListState::default().with_selected(Some(0)),
+            backup_list: RichListState::default(),
             backuper: Backuper::new(),
             timer: None,
             tick: false,
@@ -570,7 +570,7 @@ impl<'a> App<'a> {
             .highlight_symbol("> ");
 
         frame.render_widget(title, backup_list_title_area);
-        frame.render_stateful_widget(list, backup_list_area, &mut self.backup_list);
+        frame.render_stateful_widget(list, backup_list_area, &mut self.backup_list.state);
     }
 
     fn submit_new_project(&mut self) {
@@ -603,7 +603,15 @@ impl<'a> App<'a> {
     }
 
     fn restore_db(&mut self) {
-        self.db.restore();
+        let selected_backup = self.backup_list.selected();
+
+        match selected_backup {
+            Some(backup) => {
+                self.db.restore(backup);
+                self.screen = Screen::Dashboard;
+            }
+            None => {}
+        }
     }
 
     fn to_screen(&mut self, screen: Screen) {
@@ -618,7 +626,7 @@ impl<'a> App<'a> {
             }
             Screen::Restore => {
                 self.backuper.recalculate_list();
-                self.backup_list.select(Some(0));
+                self.backup_list = RichListState::new(self.backuper.list.clone());
                 self.screen = screen;
             }
             _ => self.screen = screen,
