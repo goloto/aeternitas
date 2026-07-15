@@ -612,6 +612,7 @@ impl<'a> App<'a> {
                 self.db.restore(backup);
                 self.screen = Screen::Dashboard;
                 self.update_statistics();
+                self.timer = self.db.current_timer();
             }
             None => {}
         }
