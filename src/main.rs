@@ -611,6 +611,7 @@ impl<'a> App<'a> {
             Some(backup) => {
                 self.db.restore(backup);
                 self.screen = Screen::Dashboard;
+                self.update_statistics();
             }
             None => {}
         }
