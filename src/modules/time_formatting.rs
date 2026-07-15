@@ -38,20 +38,25 @@ impl TimeFormating {
         }
     }
 
-    pub fn from_seconds_short(seconds: u64) -> String {
+    pub fn from_seconds_short(seconds: u64) -> [String; 2] {
+        let mut arr: [String; 2] = [String::new(), String::new()];
+
         if seconds > SECONDS_IN_HOUR {
             let (hours, hours_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_HOUR);
             let (minutes, _minutes_remainder) =
                 TimeFormating::euclid(hours_remainder, SECONDS_IN_MINUTE);
 
-            format!("{hours}h {minutes}m")
+            arr[0] = format!("{hours}h");
+            arr[1] = format!("{minutes}m");
         } else if seconds > SECONDS_IN_MINUTE {
             let (minutes, _minutes_remainder) = TimeFormating::euclid(seconds, SECONDS_IN_MINUTE);
 
-            format!("{minutes}m")
+            arr[1] = format!("{minutes}m");
         } else {
-            format!("0m")
+            arr[1] = format!("0m");
         }
+
+        arr
     }
 
     pub fn current_time() -> i64 {

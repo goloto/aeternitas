@@ -332,13 +332,19 @@ impl<'a> App<'a> {
                 Some(item) => {
                     let timer_wrapper_layout = Layout::new(
                         Direction::Horizontal,
-                        [Constraint::Min(1), Constraint::Min(1)],
+                        [Constraint::Min(1), Constraint::Max(10)],
                     )
                     .flex(Flex::SpaceBetween);
-                    let [project_name_area, time_area] =
+                    let timer_layout = Layout::new(
+                        Direction::Horizontal,
+                        [Constraint::Max(6), Constraint::Length(3)],
+                    )
+                    .spacing(Space(1));
+                    let [project_name_area, timer_area] =
                         timer_wrapper_layout.areas(timers_areas[i]);
+                    let [hours_area, minutes_area] = timer_layout.areas(timer_area);
 
-                    let formatted_time = TimeFormating::from_seconds_short(item.count as u64);
+                    let [hours, minutes] = TimeFormating::from_seconds_short(item.count as u64);
                     let project_name = item.project_name.clone();
 
                     let symbol = if self.tick {
@@ -358,13 +364,16 @@ impl<'a> App<'a> {
                         None => Line::from_iter([project_paragraph]),
                     };
 
+                    let time_style = Style::new().bold().fg(BOLD_TEXT_COLOR);
+
                     frame.render_widget(project_paragraph, project_name_area);
                     frame.render_widget(
-                        Paragraph::new(formatted_time)
-                            .bold()
-                            .fg(BOLD_TEXT_COLOR)
-                            .right_aligned(),
-                        time_area,
+                        Paragraph::new(hours).style(time_style).right_aligned(),
+                        hours_area,
+                    );
+                    frame.render_widget(
+                        Paragraph::new(minutes).style(time_style).right_aligned(),
+                        minutes_area,
                     );
                 }
                 None => continue,
